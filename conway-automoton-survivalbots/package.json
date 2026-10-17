@@ -1,0 +1,14 @@
+{
+  "name": "conway-automoton-survivalbots",
+  "version": "0.1.0",
+  "description": "conway-automoton-survivalbots — an automaton survival ecology: three bot species compete for food, hunt, reproduce and starve. Zero dependencies.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

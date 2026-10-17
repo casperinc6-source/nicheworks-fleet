@@ -1,0 +1,14 @@
+{
+  "name": "beige-cobras-scream",
+  "version": "0.1.0",
+  "description": "beige-cobras-scream — a minimal Node.js web app",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

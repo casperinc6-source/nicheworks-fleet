@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aggregator — multi-model chat</title>
+<style>
+  :root { --bg:#0a0a0f; --panel:#13131c; --line:#242433; --ink:#eef0f8; --dim:#8b8ba3; --violet:#a78bfa; --green:#7ee787; --red:#ff7b72; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { padding:2.2rem 1.2rem 1rem; max-width:900px; margin:0 auto; }
+  h1 { margin:0; font-size:1.7rem; letter-spacing:.06em; } h1 b { color:var(--violet); }
+  main { max-width:900px; margin:0 auto; padding:0 1.2rem 3rem; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:1rem 1.1rem; margin-top:1.1rem; }
+  .row { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
+  select, textarea, input { width:100%; padding:.6rem .7rem; background:#0c0c14; border:1px solid var(--line); border-radius:8px; color:var(--ink); font:inherit; }
+  textarea { min-height:80px; }
+  button { padding:.6rem .95rem; background:var(--violet); color:#160f28; border:0; border-radius:8px; font-weight:700; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--violet); border:1px solid var(--line); }
+  pre { white-space:pre-wrap; background:#0c0c14; border:1px solid var(--line); border-radius:8px; padding:.7rem; }
+  table { width:100%; border-collapse:collapse; } td,th { text-align:left; padding:.35rem .5rem; border-bottom:1px solid var(--line); font-size:.86rem; }
+  .pill { border:1px solid var(--line); border-radius:999px; padding:.1rem .55rem; color:var(--dim); font-size:.75rem; }
+  .up { color:var(--green); } .down { color:var(--red); }
+  .muted { color:var(--dim); font-size:.84rem; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; } @media (max-width:700px){ .grid{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<header>
+  <h1>🧠 AGGRE<b>GATOR</b> <span class="muted">· multi-model chat</span></h1>
+  <p class="muted">One box, many models. Route a prompt to a local model (Saluki) or a cloud provider — whichever is configured. A model without a provider is shown as unavailable and returns 503; nothing is faked.</p>
+</header>
+<main>
+  <div class="card">
+    <div class="row"><button id="providers">Check providers</button><span class="pill" id="pstatus"><span class="muted">unknown</span></span></div>
+    <table style="margin-top:.6rem"><thead><tr><th>Model</th><th>Provider</th><th>Available</th></tr></thead><tbody id="models"></tbody></table>
+  </div>
+
+  <div class="card">
+    <label class="muted">Model</label>
+    <select id="model"></select>
+    <textarea id="prompt" style="margin-top:.6rem">Explain, in two sentences, what a post-quantum KEM is.</textarea>
+    <div class="row" style="margin-top:.6rem">
+      <button id="send">Chat</button>
+      <button class="ghost" id="compare">Compare all (pro)</button>
+      <label class="muted"><input type="checkbox" id="save" style="width:auto" /> save thread</label>
+    </div>
+    <pre id="out" class="muted">no output yet</pre>
+  </div>
+</main>
+<script>
+  const $ = (s) => document.querySelector(s);
+  const api = (p) => 'api/' + p;
+
+  async function load() {
+    const j = await fetch(api('models')).then(r => r.json());
+    $('#models').innerHTML = j.models.map(m => `<tr><td><b>${m.label}</b><div class="muted">${m.id}</div></td><td class="muted">${m.provider}</td><td class="${m.available?'up':'down'}">${m.available?'● available':'○ not configured'}</td></tr>`).join('');
+    $('#model').innerHTML = j.models.map(m => `<option value="${m.id}">${m.label}${m.available?'':' (unavailable)'}</option>`).join('');
+  }
+
+  async function call(path, body) {
+    $('#out').textContent = 'calling…';
+    const r = await fetch(api(path), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const j = await r.json();
+    $('#out').textContent = r.status >= 400 ? '⚠ ' + (j.error || r.status) + (j.hint ? '\n' + j.hint : '') : JSON.stringify(j, null, 2);
+  }
+
+  $('#send').onclick = () => call('chat', { model: $('#model').value, messages: [{ role:'user', content: $('#prompt').value }], save: $('#save').checked });
+  $('#compare').onclick = () => call('compare', { prompt: $('#prompt').value });
+  $('#providers').onclick = async () => {
+    const j = await fetch(api('providers')).then(r => r.json());
+    $('#pstatus').innerHTML = Object.entries(j.providers).map(([k,v]) => `${k}: <span class="${v.up?'up':'down'}">${v.up?'up':(v.configured?'unreachable':'not configured')}</span>`).join(' · ');
+    load();
+  };
+  load();
+</script>
+</body>
+</html>

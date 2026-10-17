@@ -1,0 +1,1099 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JARVIS — the voice assistant that runs your computer</title>
+<meta name="description" content="Say what needs doing. JARVIS runs the apps, watches the screen, remembers locally, and clears the busywork." />
+<style>
+  :root {
+    --navy: #080B16;        /* Deep Space Navy — page bg */
+    --surface: #0B121E;     /* secondary surface */
+    --ice: #E8F4FF;         /* primary text on dark */
+    --cyan: #4FD8FF;        /* Electric Cyan — actions */
+    --ink: #04070D;         /* text on cyan */
+    --slate: #253549;       /* borders */
+    --mut: rgba(232, 244, 255, .62);
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    --pill: 28px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--navy); color: var(--ice);
+    font-family: var(--sans); font-size: 19px; line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--cyan); color: var(--ink); }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 96px 0; }
+  h1 { font-size: clamp(38px, 6vw, 56px); font-weight: 700; line-height: 1.08; letter-spacing: -.5px; margin: 0 0 20px; }
+  h2 { font-size: clamp(28px, 4vw, 38px); font-weight: 700; line-height: 1.15; margin: 0 0 14px; }
+  h3 { margin: 0 0 8px; font-size: 18px; font-weight: 600; }
+  p  { margin: 0 0 16px; color: var(--mut); }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .22em;
+    text-transform: uppercase; color: var(--cyan); margin-bottom: 18px;
+  }
+  .mono { font-family: var(--mono); }
+  a { color: var(--cyan); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ---- buttons: pill radius 28px, primary cyan w/ soft glow ---- */
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 14px 30px; border-radius: var(--pill);
+    font-size: 17px; font-weight: 600; border: 1px solid transparent;
+    cursor: pointer; transition: transform .12s ease, box-shadow .2s ease, border-color .2s ease;
+  }
+  .btn-primary { background: var(--cyan); color: var(--ink); box-shadow: 0 0 24px rgba(79, 216, 255, .35); }
+  .btn-primary:hover { text-decoration: none; box-shadow: 0 0 38px rgba(79, 216, 255, .55); transform: translateY(-1px); }
+  .btn-secondary { background: var(--surface); color: var(--ice); border-color: var(--slate); }
+  .btn-secondary:hover { text-decoration: none; border-color: var(--cyan); }
+  .btn-small { padding: 9px 20px; font-size: 14px; }
+  :is(a, button):focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: var(--pill); }
+
+  /* ---- macOS-style menubar ---- */
+  .menubar {
+    position: sticky; top: 0; z-index: 60;
+    background: rgba(8, 11, 22, .78);
+    backdrop-filter: blur(16px) saturate(1.3);
+    -webkit-backdrop-filter: blur(16px) saturate(1.3);
+    border-bottom: 1px solid var(--slate);
+  }
+  .menubar nav { display: flex; align-items: center; gap: 4px; padding: 10px 0; }
+  .menubar .brand { font-family: var(--mono); font-weight: 600; letter-spacing: .18em; font-size: 14px; color: var(--ice); padding: 5px 12px 5px 0; margin-right: 10px; }
+  .menubar .brand b { color: var(--cyan); font-weight: 600; }
+  .menubar .links { display: flex; gap: 2px; font-size: 14px; align-items: center; }
+  .menubar .links a { color: var(--mut); padding: 5px 11px; border-radius: 7px; transition: background .15s, color .15s; }
+  .menubar .links a:hover { color: var(--ice); background: rgba(232, 244, 255, .08); text-decoration: none; }
+  .menubar .status { margin-left: auto; display: flex; align-items: center; gap: 14px; font-family: var(--mono); font-size: 12px; color: var(--mut); }
+  .menubar .status .live { color: var(--cyan); letter-spacing: .14em; font-size: 10.5px; }
+  .menubar .status .live::before { content: "●"; margin-right: 6px; animation: pulse 2.1s ease-in-out infinite; }
+  @media (max-width: 860px) { .menubar .links { display: none; } .menubar .status .live { display: none; } }
+  section, header.hero { scroll-margin-top: 64px; }
+
+  /* ---- download modal ---- */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 100; display: none; place-items: center;
+    background: rgba(4, 7, 13, .72); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+  }
+  .modal-backdrop.open { display: grid; }
+  .modal {
+    width: min(540px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto;
+    background: var(--surface); border: 1px solid var(--slate); border-radius: 14px;
+    box-shadow: 0 40px 120px rgba(0, 0, 0, .65), 0 0 90px rgba(79, 216, 255, .08);
+  }
+  .modal .titlebar {
+    display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--slate);
+    background: rgba(8, 11, 22, .6); position: sticky; top: 0;
+  }
+  .modal .dots { display: flex; gap: 7px; }
+  .modal .dots i { width: 11px; height: 11px; border-radius: 50%; opacity: .8; }
+  .modal .dots i:nth-child(1) { background: #ff6b6b; }
+  .modal .dots i:nth-child(2) { background: #ffd166; }
+  .modal .dots i:nth-child(3) { background: #51cf66; }
+  .modal .titlebar .t { flex: 1; text-align: center; font-family: var(--mono); font-size: 12px; letter-spacing: .16em; color: var(--mut); text-transform: uppercase; }
+  .modal .titlebar .x { font-family: var(--mono); color: var(--mut); cursor: pointer; padding: 2px 8px; border-radius: 6px; }
+  .modal .titlebar .x:hover { color: var(--ice); background: rgba(232, 244, 255, .08); }
+  .modal .body { padding: 24px; }
+  .modal h3 { margin: 0 0 4px; font-size: 22px; }
+  .modal .sub { font-family: var(--mono); font-size: 12px; color: var(--mut); margin-bottom: 6px; }
+  .modal .plan-tag { display: none; font-family: var(--mono); font-size: 11px; color: var(--cyan); border: 1px solid rgba(79, 216, 255, .35); background: rgba(79, 216, 255, .07); border-radius: var(--pill); padding: 3px 12px; margin: 10px 0 2px; }
+  .modal .dl-rows { display: grid; gap: 10px; margin: 18px 0 14px; }
+  .dl-row { display: flex; align-items: center; gap: 14px; padding: 13px 14px; border: 1px solid var(--slate); border-radius: 12px; background: rgba(8, 11, 22, .5); }
+  .dl-row.rec { border-color: rgba(79, 216, 255, .55); box-shadow: 0 0 24px rgba(79, 216, 255, .10); }
+  .dl-row .pf { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--cyan); border: 1px solid rgba(79, 216, 255, .35); border-radius: 8px; padding: 8px 9px; min-width: 44px; text-align: center; }
+  .dl-row .meta { flex: 1; }
+  .dl-row .meta b { display: block; font-size: 15px; color: var(--ice); font-weight: 600; }
+  .dl-row .meta span { font-family: var(--mono); font-size: 11px; color: var(--mut); }
+  .dl-row .rec-tag { font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em; color: var(--ink); background: var(--cyan); border-radius: var(--pill); padding: 3px 9px; font-weight: 700; }
+  .modal .dl-progress { height: 5px; border-radius: 3px; background: rgba(37, 53, 73, .6); overflow: hidden; margin-top: 6px; opacity: 0; transition: opacity .2s; }
+  .modal .dl-progress.show { opacity: 1; }
+  .modal .dl-progress .fill { height: 100%; width: 0%; background: var(--cyan); box-shadow: 0 0 10px rgba(79, 216, 255, .7); transition: width .2s ease; }
+  .modal .note { font-family: var(--mono); font-size: 11.5px; line-height: 1.6; color: var(--mut); min-height: 1.2em; margin-top: 12px; }
+  .modal .note.ok { color: var(--cyan); }
+  .modal .fine { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; color: var(--mut); border-top: 1px solid var(--slate); padding-top: 14px; margin-top: 16px; }
+
+  /* ---- hero ---- */
+  .hero { padding: 84px 0 64px; text-align: center; }
+  .hero h1 .glow { color: var(--cyan); text-shadow: 0 0 32px rgba(79, 216, 255, .45); }
+  .hero p.lede { font-size: 21px; max-width: 640px; margin: 0 auto 36px; }
+  .hero .ctas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 18px; }
+  .hero .platforms { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; color: var(--mut); }
+  .scroll-hint { font-family: var(--mono); font-size: 11px; letter-spacing: .2em; color: var(--mut); margin-top: 26px; }
+  /* popular voice commands (DealMachine "popular searches" pattern) */
+  .chips { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 22px auto 6px; max-width: 760px; }
+  .chip {
+    font-family: var(--mono); font-size: 12.5px; color: var(--mut);
+    background: var(--surface); border: 1px solid var(--slate); border-radius: var(--pill);
+    padding: 8px 16px; cursor: pointer; transition: color .15s, border-color .15s;
+  }
+  .chip:hover { color: var(--cyan); border-color: rgba(79, 216, 255, .6); }
+  .chips-label { font-family: var(--mono); font-size: 10.5px; letter-spacing: .2em; color: var(--mut); text-transform: uppercase; margin-top: 20px; }
+
+  /* ---- HUD visual ---- */
+  .hud-wrap { margin: 56px auto 0; max-width: 900px; }
+  .hud {
+    background: linear-gradient(180deg, #0A0F1C, var(--surface));
+    border: 1px solid var(--slate); border-radius: 18px;
+    padding: 26px; display: grid; grid-template-columns: 220px 1fr 260px; gap: 22px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, .55), 0 0 60px rgba(79, 216, 255, .07);
+    text-align: left;
+  }
+  @media (max-width: 860px) { .hud { grid-template-columns: 1fr; } }
+  .hud .panel { border: 1px solid var(--slate); border-radius: 12px; padding: 16px; background: rgba(8, 11, 22, .6); }
+  .hud .panel h4 {
+    margin: 0 0 12px; font-family: var(--mono); font-size: 10px; font-weight: 600;
+    letter-spacing: .2em; color: var(--mut); text-transform: uppercase;
+  }
+  .core { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 8px 0; }
+  .ring { width: 128px; height: 128px; border-radius: 50%; position: relative; display: grid; place-items: center; }
+  .ring::before {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+    background: conic-gradient(from 0deg, transparent 0 300deg, var(--cyan) 330deg, transparent 360deg);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+    animation: spin 3.2s linear infinite;
+  }
+  .ring::after {
+    content: ""; position: absolute; inset: 14px; border-radius: 50%;
+    border: 1px dashed rgba(79, 216, 255, .35); animation: spin 9s linear infinite reverse;
+  }
+  .ring .dot {
+    width: 14px; height: 14px; border-radius: 50%; background: var(--cyan);
+    box-shadow: 0 0 18px var(--cyan), 0 0 44px rgba(79, 216, 255, .5);
+    animation: pulse 2.1s ease-in-out infinite;
+  }
+  .ring .glyph { position: absolute; font-family: var(--mono); font-size: 15px; color: var(--cyan); letter-spacing: .1em; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.35); opacity: .75; } }
+  .status { font-family: var(--mono); font-size: 11px; letter-spacing: .18em; color: var(--cyan); }
+  .status small { display: block; color: var(--mut); letter-spacing: .1em; margin-top: 4px; font-size: 10px; }
+  .tele .bar { margin: 11px 0; }
+  .tele .bar .lbl { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--mut); margin-bottom: 5px; }
+  .tele .bar .track { height: 5px; border-radius: 3px; background: rgba(37, 53, 73, .6); overflow: hidden; }
+  .tele .bar .fill { height: 100%; border-radius: 3px; background: var(--cyan); box-shadow: 0 0 10px rgba(79, 216, 255, .7); transition: width .9s ease; }
+  .log { font-family: var(--mono); font-size: 11.5px; line-height: 1.9; color: var(--mut); min-height: 168px; }
+  .log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .log .t { color: rgba(79, 216, 255, .75); }
+  .log .ok { color: var(--ice); }
+  @media (prefers-reduced-motion: reduce) { .ring::before, .ring::after, .ring .dot { animation: none; } }
+
+  /* ---- stat bar (DealMachine pattern) ---- */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; max-width: 900px; margin: 44px auto 0; text-align: center; }
+  @media (max-width: 720px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stats .stat b { display: block; font-size: 30px; font-weight: 700; color: var(--ice); font-variant-numeric: tabular-nums; }
+  .stats .stat b em { font-style: normal; color: var(--cyan); }
+  .stats .stat span { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; color: var(--mut); text-transform: uppercase; }
+
+  /* ---- pain section (DealMachine "you shouldn't need 5 tools" pattern) ---- */
+  .pain-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
+  @media (max-width: 860px) { .pain-grid { grid-template-columns: 1fr; } }
+  .pain { background: var(--surface); border: 1px solid var(--slate); border-radius: 14px; padding: 26px; }
+  .pain .x { font-family: var(--mono); color: #ff6b6b; font-size: 13px; margin-bottom: 12px; }
+  .pain p { font-size: 15px; margin: 0; }
+
+  /* ---- capabilities ---- */
+  .cap-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
+  @media (max-width: 920px) { .cap-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 620px) { .cap-grid { grid-template-columns: 1fr; } }
+  .cap {
+    background: var(--surface); border: 1px solid var(--slate); border-radius: 14px; padding: 26px;
+    transition: border-color .2s ease;
+  }
+  .cap:hover { border-color: rgba(79, 216, 255, .55); }
+  .cap .quote {
+    font-family: var(--mono); font-size: 12.5px; color: var(--cyan);
+    background: rgba(79, 216, 255, .07); border: 1px solid rgba(79, 216, 255, .25);
+    border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; line-height: 1.55;
+  }
+  .cap p { font-size: 15px; line-height: 1.55; margin: 0; }
+
+  /* ---- personas (DealMachine "built for how you work") ---- */
+  .who-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
+  @media (max-width: 860px) { .who-grid { grid-template-columns: 1fr; } }
+  .who { border: 1px solid var(--slate); border-radius: 14px; padding: 26px; background: var(--surface); }
+  .who .quote { font-family: var(--mono); font-size: 12.5px; color: var(--cyan); margin-bottom: 12px; line-height: 1.6; }
+  .who p { font-size: 15px; margin: 0; }
+
+  /* ---- testimonials ---- */
+  .testi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
+  @media (max-width: 860px) { .testi-grid { grid-template-columns: 1fr; } }
+  .testi { background: var(--surface); border: 1px solid var(--slate); border-radius: 14px; padding: 26px; display: flex; flex-direction: column; }
+  .testi .mark { font-size: 40px; line-height: .6; color: var(--cyan); margin-bottom: 14px; font-family: var(--sans); }
+  .testi blockquote { margin: 0 0 18px; font-size: 15.5px; line-height: 1.65; color: var(--ice); flex: 1; }
+  .testi .who2 b { display: block; font-size: 15px; color: var(--ice); font-weight: 600; }
+  .testi .who2 span { font-family: var(--mono); font-size: 11.5px; color: var(--cyan); letter-spacing: .08em; }
+
+  /* ---- comparison (DealMachine "vs the old way") ---- */
+  .compare { max-width: 860px; margin: 44px auto 0; border: 1px solid var(--slate); border-radius: 14px; overflow: hidden; }
+  .compare .row { display: grid; grid-template-columns: 1fr 1fr; }
+  .compare .row > div { padding: 18px 24px; font-size: 15.5px; }
+  .compare .head { background: rgba(11, 18, 30, .9); font-family: var(--mono); font-size: 11.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--mut); }
+  .compare .head .new { color: var(--cyan); }
+  .compare .row:nth-child(odd):not(.head) { background: var(--surface); }
+  .compare .old { color: var(--mut); border-right: 1px solid var(--slate); }
+  .compare .old::before { content: "✕  "; color: #ff6b6b; font-family: var(--mono); font-size: 12px; }
+  .compare .new { color: var(--ice); }
+  .compare .new::before { content: "▸  "; color: var(--cyan); font-family: var(--mono); font-size: 12px; }
+  @media (max-width: 640px) { .compare .row > div { font-size: 14px; padding: 14px 16px; } }
+
+  /* ---- setup ---- */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
+  @media (max-width: 780px) { .steps { grid-template-columns: 1fr; } }
+  .step { background: var(--surface); border: 1px solid var(--slate); border-radius: 14px; padding: 26px; }
+  .step .n { font-family: var(--mono); font-size: 12px; color: var(--cyan); letter-spacing: .18em; margin-bottom: 12px; }
+  .step p { font-size: 15px; margin: 0; }
+  .step code { font-family: var(--mono); font-size: 12.5px; color: var(--cyan); background: rgba(79,216,255,.07); padding: 2px 7px; border-radius: 5px; }
+
+  /* ---- pricing (DealMachine toggle + badge pattern) ---- */
+  .billing { display: inline-flex; align-items: center; gap: 12px; margin-top: 28px; font-family: var(--mono); font-size: 12.5px; color: var(--mut); }
+  .billing .save { color: var(--cyan); }
+  .switch { position: relative; width: 46px; height: 26px; border-radius: 13px; background: var(--surface); border: 1px solid var(--slate); cursor: pointer; transition: background .2s; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--mut); transition: transform .2s, background .2s; }
+  .switch.on { background: rgba(79, 216, 255, .25); border-color: var(--cyan); }
+  .switch.on::after { transform: translateX(20px); background: var(--cyan); }
+  .tiers { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; max-width: 780px; margin: 36px auto 0; }
+  @media (max-width: 680px) { .tiers { grid-template-columns: 1fr; } }
+  .tier { position: relative; background: var(--surface); border: 1px solid var(--slate); border-radius: 16px; padding: 32px; }
+  .tier.featured { border-color: rgba(79, 216, 255, .6); box-shadow: 0 0 44px rgba(79, 216, 255, .10); }
+  .tier .badge {
+    position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase;
+    background: var(--cyan); color: var(--ink); border-radius: var(--pill); padding: 5px 14px; font-weight: 700;
+  }
+  .tier .name { font-family: var(--mono); font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--mut); }
+  .tier.featured .name { color: var(--cyan); }
+  .tier .price { font-size: 44px; font-weight: 700; margin: 10px 0 2px; color: var(--ice); font-variant-numeric: tabular-nums; }
+  .tier .price small { font-size: 15px; font-weight: 400; color: var(--mut); }
+  .tier .fine { font-family: var(--mono); font-size: 11px; color: var(--mut); min-height: 1.4em; }
+  .tier ul { list-style: none; margin: 22px 0 26px; padding: 0; font-size: 15px; color: var(--mut); }
+  .tier li { padding: 7px 0 7px 26px; position: relative; }
+  .tier li::before { content: "▸"; position: absolute; left: 4px; color: var(--cyan); }
+  .tier .btn { width: 100%; justify-content: center; }
+  .pricing-foot { text-align: center; margin-top: 26px; font-size: 15px; }
+  .pricing-foot a { font-family: var(--mono); font-size: 13px; }
+
+  /* ---- faq ---- */
+  .faq { max-width: 780px; margin: 44px auto 0; }
+  .faq details { background: var(--surface); border: 1px solid var(--slate); border-radius: 12px; margin-bottom: 12px; }
+  .faq summary { cursor: pointer; list-style: none; padding: 18px 22px; font-weight: 600; font-size: 16.5px; color: var(--ice); display: flex; justify-content: space-between; align-items: center; }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after { content: "+"; font-family: var(--mono); color: var(--cyan); font-size: 18px; }
+  .faq details[open] summary::after { content: "−"; }
+  .faq details p { padding: 0 22px 20px; margin: 0; font-size: 15.5px; }
+
+  /* ---- live demo (interactive HUD console) ---- */
+  .demo-wrap { max-width: 860px; margin: 44px auto 0; border: 1px solid var(--slate); border-radius: 16px; overflow: hidden; background: linear-gradient(180deg, #0A0F1C, var(--surface)); box-shadow: 0 30px 80px rgba(0, 0, 0, .55), 0 0 60px rgba(79, 216, 255, .07); }
+  .demo-titlebar { display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-bottom: 1px solid var(--slate); background: rgba(8, 11, 22, .65); }
+  .demo-titlebar .dots { display: flex; gap: 7px; }
+  .demo-titlebar .dots i { width: 11px; height: 11px; border-radius: 50%; opacity: .85; }
+  .demo-titlebar .dots i:nth-child(1) { background: #ff6b6b; }
+  .demo-titlebar .dots i:nth-child(2) { background: #ffd166; }
+  .demo-titlebar .dots i:nth-child(3) { background: #51cf66; }
+  .demo-titlebar .t { flex: 1; text-align: center; font-family: var(--mono); font-size: 11.5px; letter-spacing: .18em; color: var(--mut); text-transform: uppercase; }
+  .demo-status { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .16em; color: var(--cyan); }
+  .demo-status::before { content: "●"; animation: pulse 2.1s ease-in-out infinite; }
+  .demo-log { height: 320px; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px; font-family: var(--mono); font-size: 13px; line-height: 1.65; }
+  .msg { max-width: 86%; }
+  .msg .who { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--mut); margin-bottom: 5px; }
+  .msg.user { align-self: flex-end; text-align: right; }
+  .msg.user .bubble { display: inline-block; background: rgba(79, 216, 255, .12); border: 1px solid rgba(79, 216, 255, .4); border-radius: 12px 12px 3px 12px; padding: 10px 14px; color: var(--ice); }
+  .msg.user .who { color: rgba(79, 216, 255, .8); }
+  .msg.jarvis .bubble { display: inline-block; background: rgba(8, 11, 22, .7); border: 1px solid var(--slate); border-radius: 12px 12px 12px 3px; padding: 10px 14px; color: var(--ice); text-align: left; }
+  .msg.jarvis .bubble .cyan { color: var(--cyan); }
+  .msg.jarvis .bubble .warn { color: #FFD166; }
+  .msg.jarvis .bubble .dim { color: var(--mut); font-size: 11.5px; }
+  .cursor { display: inline-block; width: 8px; height: 14px; background: var(--cyan); vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .demo-input { display: flex; gap: 10px; padding: 14px 16px; border-top: 1px solid var(--slate); background: rgba(8, 11, 22, .55); }
+  .demo-input .prompt { font-family: var(--mono); color: var(--cyan); font-size: 15px; align-self: center; }
+  #demo-input { flex: 1; background: rgba(4, 7, 13, .6); border: 1px solid var(--slate); border-radius: var(--pill); padding: 11px 18px; color: var(--ice); font-family: var(--mono); font-size: 13.5px; outline: none; transition: border-color .15s, box-shadow .15s; }
+  #demo-input:focus { border-color: rgba(79, 216, 255, .6); box-shadow: 0 0 18px rgba(79, 216, 255, .12); }
+  #demo-input::placeholder { color: var(--mut); }
+  .demo-input button { border-radius: var(--pill); padding: 0 22px; }
+  .demo-chips { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 16px; }
+  .demo-chip { font-family: var(--mono); font-size: 12px; color: var(--mut); background: var(--surface); border: 1px solid var(--slate); border-radius: var(--pill); padding: 8px 16px; cursor: pointer; transition: color .15s, border-color .15s; }
+  .demo-chip:hover { color: var(--cyan); border-color: rgba(79, 216, 255, .6); }
+  .demo-foot { text-align: center; font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; color: var(--mut); margin-top: 14px; }
+
+  /* ---- final cta + footer ---- */
+  .final { text-align: center; border-top: 1px solid var(--slate); }
+  .final .fine { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; color: var(--mut); margin-top: 18px; }
+  footer { border-top: 1px solid var(--slate); padding: 28px 0 40px; }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-family: var(--mono); font-size: 11.5px; letter-spacing: .08em; color: var(--mut); }
+  footer a { color: var(--mut); }
+  footer a:hover { color: var(--cyan); text-decoration: none; }
+  /* ---- fleet ---- */
+  .fleet { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin-top: 36px; }
+  .app-card { display: flex; flex-direction: column; gap: 6px; text-align: left; text-decoration: none; background: var(--surface); border: 1px solid var(--slate); border-radius: 16px; padding: 18px 20px; transition: border-color .15s, transform .15s, box-shadow .15s; }
+  .app-card:hover { border-color: rgba(79, 216, 255, .7); transform: translateY(-2px); box-shadow: 0 10px 28px rgba(79, 216, 255, .10); }
+  .app-card .mount { font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; color: var(--mut); }
+  .app-card .mount b { color: var(--cyan); font-weight: 600; }
+  .app-card .name { font-size: 15.5px; font-weight: 600; color: var(--ice); }
+  .app-card .desc { font-size: 12.5px; color: var(--mut); line-height: 1.45; }
+  .app-card .go { font-family: var(--mono); font-size: 11px; color: var(--cyan); margin-top: 4px; }
+  .fleet-foot { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--mut); margin-top: 18px; }
+  .fleet-foot a { color: var(--cyan); }
+  .divider { border: 0; border-top: 1px solid var(--slate); margin: 0; }
+</style>
+</head>
+<body>
+
+<div class="menubar">
+  <div class="wrap">
+    <nav>
+      <span class="brand">J.A.R.V.I.S<b>_</b></span>
+      <div class="links">
+        <a href="#capabilities">Capabilities</a>
+        <a href="#compare">Compare</a>
+        <a href="#setup">Setup</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#demo">Demo</a>
+        <a href="#faq">FAQ</a>
+      </div>
+      <div class="status">
+        <span class="live">ONLINE</span>
+        <span id="clock">--:--</span>
+        <button class="btn btn-primary btn-small js-get">Get JARVIS</button>
+      </div>
+    </nav>
+  </div>
+</div>
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Voice Operating Layer · Local-First</div>
+    <h1>It doesn't tell you how to run<br />your computer. <span class="glow">It runs it.</span></h1>
+    <p class="lede">Say what needs doing — out loud, in plain words. JARVIS opens the apps, moves the windows, reads the screen, and clears the busywork while you keep talking.</p>
+    <div class="ctas">
+      <button class="btn btn-primary js-get">Get JARVIS</button>
+      <a class="btn btn-secondary" href="#capabilities">See what it can do</a>
+    </div>
+
+    <!-- popular voice commands (DealMachine "popular searches" pattern) -->
+    <div class="chips-label">Popular voice commands — click to hear JARVIS take it</div>
+    <div class="chips">
+      <button class="chip" data-cmd='» "open my morning layout"' data-res='ok — 4 windows tiled, mail on the left'>"Open my morning layout"</button>
+      <button class="chip" data-cmd='» "what changed in the spec? sources."' data-res='live search — 9 sources cited'>"What changed in the spec? Sources."</button>
+      <button class="chip" data-cmd='» "disk is at 91% — fix it"' data-res='cleaned 3.2 GB of caches · verified'>"Disk is at 91% — fix it"</button>
+      <button class="chip" data-cmd='» "focus mode for 90 minutes"' data-res='notifications held · Slack paused'>"Focus mode for 90 minutes"</button>
+    </div>
+
+    <div class="platforms">MACOS · WINDOWS · LINUX — RUNS LOCALLY, YOUR DATA STAYS YOURS</div>
+    <div class="scroll-hint">SCROLL TO EXPLORE ↓</div>
+
+    <!-- HUD product visual -->
+    <div class="hud-wrap">
+      <div class="hud" role="img" aria-label="JARVIS heads-up display with telemetry and activity log">
+        <div class="panel core">
+          <div class="ring"><span class="dot"></span><span class="glyph">JS</span></div>
+          <div class="status">LISTENING<small>mic · on-device wake word</small></div>
+        </div>
+        <div class="panel tele">
+          <h4>Telemetry</h4>
+          <div class="bar"><div class="lbl"><span>CPU</span><span id="t-cpu">—</span></div><div class="track"><div class="fill" id="f-cpu"></div></div></div>
+          <div class="bar"><div class="lbl"><span>MEMORY</span><span id="t-mem">—</span></div><div class="track"><div class="fill" id="f-mem"></div></div></div>
+          <div class="bar"><div class="lbl"><span>NETWORK</span><span id="t-net">—</span></div><div class="track"><div class="fill" id="f-net"></div></div></div>
+          <div class="bar"><div class="lbl"><span>AGENT LOAD</span><span id="t-agt">—</span></div><div class="track"><div class="fill" id="f-agt"></div></div></div>
+          <h4 style="margin-top:16px">Windows</h4>
+          <div class="log" style="min-height:0">
+            <div><span class="t">01</span> <span class="ok">Terminal — deploy.sh</span></div>
+            <div><span class="t">02</span> <span class="ok">Figma — hud-v1</span></div>
+            <div><span class="t">03</span> <span class="ok">Mail — 3 unread</span></div>
+            <div><span class="t">04</span> <span class="ok">Spotify — focus mix</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h4>Activity Log</h4>
+          <div class="log" id="log"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- stat bar (DealMachine pattern) -->
+    <div class="stats">
+      <div class="stat"><b><em>6</em></b><span>core systems</span></div>
+      <div class="stat"><b>120<em>+</em></b><span>voice commands</span></div>
+      <div class="stat"><b><em>0</em> bytes</b><span>leave your machine</span></div>
+      <div class="stat"><b><em>90</em>s</b><span>to first command</span></div>
+    </div>
+  </div>
+</header>
+
+<!-- ============ PAIN (DealMachine pattern) ============ -->
+<section id="pain">
+  <div class="wrap">
+    <div class="eyebrow">The problem</div>
+    <h2>You shouldn't need five apps<br />to run one computer.</h2>
+    <p>Right now your machine is a collection of windows you manage by hand. The busywork is the work.</p>
+    <div class="pain-grid">
+      <div class="pain"><div class="x">✕ PAIN 01</div><h3>Window archaeology</h3><p>Launch, arrange, alt-tab, lose the tab, find the tab. Twenty clicks before the actual work starts.</p></div>
+      <div class="pain"><div class="x">✕ PAIN 02</div><h3>The busywork tax</h3><p>Renaming files, rescheduling meetings, retyping the same reply. Hours that never show up in anything you're proud of.</p></div>
+      <div class="pain"><div class="x">✕ PAIN 03</div><h3>Reactive maintenance</h3><p>You find out about the full disk, the runaway process, the dead backup — when everything already froze.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CAPABILITIES ============ -->
+<hr class="divider" />
+<section id="capabilities">
+  <div class="wrap">
+    <div class="eyebrow">Capabilities</div>
+    <h2>One voice, every part of the machine.</h2>
+    <p>Six systems, one conversation. No scripting, no window-hunting, no tab archaeology.</p>
+    <div class="cap-grid">
+      <div class="cap">
+        <div class="quote">"Open the quarterly deck and put it next to my inbox."</div>
+        <h3>Runs apps &amp; windows</h3>
+        <p>Launches anything installed, arranges windows into workspaces, switches desktops, and closes the noise when you're done.</p>
+      </div>
+      <div class="cap">
+        <div class="quote">"What am I looking at right now?"</div>
+        <h3>Sees screen &amp; camera</h3>
+        <p>Reads the screen on request — summarizes the doc you're on, finds that error, checks who's at the door through the camera.</p>
+      </div>
+      <div class="cap">
+        <div class="quote">"Remember that the prod key lives in the vault."</div>
+        <h3>Remembers locally</h3>
+        <p>A private memory store on your disk — preferences, projects, people. Nothing syncs anywhere you didn't point it at.</p>
+      </div>
+      <div class="cap">
+        <div class="quote">"Reschedule the 3pm and reply to Sam with the numbers."</div>
+        <h3>Handles the busywork</h3>
+        <p>Calendar shuffles, drafted replies, renamed files, filled forms. The chores you'd rather never touch, done while you think.</p>
+      </div>
+      <div class="cap">
+        <div class="quote">"What changed in the spec this week? Sources."</div>
+        <h3>Live search, with sources</h3>
+        <p>Searches the live web and your own folders, then answers with the receipts — every claim linked back to where it came from.</p>
+      </div>
+      <div class="cap">
+        <div class="quote">"Disk is at 91% — fix it before I notice."</div>
+        <h3>Keeps the machine healthy</h3>
+        <p>Watches CPU, memory and disk; kills runaway processes with a confirmation; clears caches; flags the weird before it becomes the broken.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WHO IT'S FOR (DealMachine personas) ============ -->
+<hr class="divider" />
+<section id="who">
+  <div class="wrap">
+    <div class="eyebrow">Built for how you work</div>
+    <h2>Different machines. Same sentence.</h2>
+    <div class="who-grid">
+      <div class="who"><div class="quote">"run the tests, open the failing logs, tell me what broke"</div><h3>Developers</h3><p>Test runs, log tails, window layouts per project. The terminal finally has a voice interface.</p></div>
+      <div class="who"><div class="quote">"clear my morning — reschedule, draft replies, summarize the deck"</div><h3>Founders</h3><p>The operational half of the job handled between thoughts, not after hours.</p></div>
+      <div class="who"><div class="quote">"watch the dashboards, ping me when anything drifts"</div><h3>Operators</h3><p>Your machine — and everything it monitors — watched by something that never blinks.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TESTIMONIALS (DealMachine pattern) ============ -->
+<hr class="divider" />
+<section id="stories">
+  <div class="wrap">
+    <div class="eyebrow">Beta field reports</div>
+    <h2>Trusted by people who hate clicking.</h2>
+    <div class="testi-grid">
+      <div class="testi">
+        <div class="mark">"</div>
+        <blockquote>I stopped alt-tabbing somewhere in week one. Now I just say the outcome I want and watch it happen across four apps at once.</blockquote>
+        <div class="who2"><b>Mara V.</b><span>INDIE DEVELOPER · 10 HRS/WEEK BACK</span></div>
+      </div>
+      <div class="testi">
+        <div class="mark">"</div>
+        <blockquote>It's the first assistant that actually does the boring half of my job — the rescheduling, the follow-ups, the file renaming. Quietly, every day.</blockquote>
+        <div class="who2"><b>Tom Okafor</b><span>OPERATIONS LEAD · INBOX ZERO, MOSTLY</span></div>
+      </div>
+      <div class="testi">
+        <div class="mark">"</div>
+        <blockquote>The health watcher alone paid for it. It flagged a runaway render process before it cooked my laptop. Nothing has frozen since March.</blockquote>
+        <div class="who2"><b>Priya N.</b><span>VIDEO EDITOR · ZERO CRASHES SINCE MARCH</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ COMPARISON (DealMachine "vs the old way") ============ -->
+<hr class="divider" />
+<section id="compare">
+  <div class="wrap">
+    <div class="eyebrow">Compare</div>
+    <h2>JARVIS vs. the old way</h2>
+    <p>Stop duct-taping clicks together. Here's what changes when the computer works for you.</p>
+    <div class="compare">
+      <div class="row head"><div>The old way</div><div class="new">With JARVIS</div></div>
+      <div class="row"><div class="old">Ten clicks to launch and arrange your workspace</div><div class="new">One sentence tiles the whole layout</div></div>
+      <div class="row"><div class="old">Copy-paste between five apps to finish one task</div><div class="new">JARVIS moves the data — you stay in flow</div></div>
+      <div class="row"><div class="old">Discover the full disk when everything freezes</div><div class="new">Warned at 80%, cleaned by 85%</div></div>
+      <div class="row"><div class="old">Meetings moved by hand, replies typed twice</div><div class="new">Rescheduled and drafted while you talk</div></div>
+      <div class="row"><div class="old">Assistant that uploads your screen to someone's cloud</div><div class="new">Local-first — zero bytes leave the machine</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SETUP ============ -->
+<hr class="divider" />
+<section id="setup">
+  <div class="wrap">
+    <div class="eyebrow">Setup</div>
+    <h2>Talking in ninety seconds.</h2>
+    <div class="steps">
+      <div class="step"><div class="n">STEP 01</div><h3>Install</h3><p>One small app for macOS, Windows, or Linux. No account required to start — drag, run, <code>jarvis</code>.</p></div>
+      <div class="step"><div class="n">STEP 02</div><h3>Grant the keys</h3><p>Approve exactly what JARVIS may touch — apps, screen, files. Permissions are visible and revocable at any moment.</p></div>
+      <div class="step"><div class="n">STEP 03</div><h3>Say something</h3><p>"Open my morning layout." That's the whole onboarding. It learns your routines from the way you actually work.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRICING ============ -->
+<hr class="divider" />
+<section id="pricing">
+  <div class="wrap">
+    <div class="eyebrow">Pricing</div>
+    <h2>Free where it counts. Pro where it compounds.</h2>
+    <div class="billing">
+      <span>MONTHLY</span>
+      <div class="switch" id="billing-switch" role="switch" aria-checked="false" tabindex="0"></div>
+      <span>ANNUAL</span>
+      <span class="save">SAVE 17%</span>
+    </div>
+    <div class="tiers">
+      <div class="tier">
+        <div class="name">Personal</div>
+        <div class="price">$0 <small>/ month</small></div>
+        <div class="fine">free forever — not a trial</div>
+        <ul>
+          <li>Voice control for apps, windows &amp; files</li>
+          <li>Local memory on one machine</li>
+          <li>Screen understanding — 20 sessions / day</li>
+          <li>Busywork automations — 30 / month</li>
+          <li>Community support</li>
+        </ul>
+        <button class="btn btn-secondary js-get" data-plan="Personal · free forever">Download Personal</button>
+      </div>
+      <div class="tier featured">
+        <div class="badge">Most popular</div>
+        <div class="name">Pro — for operators</div>
+        <div class="price" id="pro-price">$12 <small>/ month</small></div>
+        <div class="fine" id="pro-fine">billed monthly · cancel anytime</div>
+        <ul>
+          <li>Everything in Personal, unlimited</li>
+          <li>Camera vision + continuous screen context</li>
+          <li>Live web search with full source receipts</li>
+          <li>Machine health autopilot &amp; alerts</li>
+          <li>Multi-machine sync, encrypted end-to-end</li>
+          <li>Priority support from the engineers</li>
+        </ul>
+        <button class="btn btn-primary js-get" data-plan="Pro · $12/mo">Get Pro</button>
+      </div>
+    </div>
+    <div class="pricing-foot">No contracts. No hidden fees. Cancel anytime. <br /><a href="#">See full pricing →</a></div>
+  </div>
+</section>
+
+<!-- ============ FLEET ============ -->
+<hr class="divider" />
+<section id="fleet">
+  <div class="wrap">
+    <div class="eyebrow">The Fleet</div>
+    <h2>Eleven live apps. One portfolio. Zero npm installs.</h2>
+    <div class="fleet" id="fleet-grid">
+      <a class="app-card" href="/jarvis/" data-hub="/jarvis/" data-pages="https://casperinc6-source.github.io/jarvis-landing/">
+        <span class="mount">/jarvis · :3006</span>
+        <span class="name">J.A.R.V.I.S</span>
+        <span class="desc">Voice operating layer — this landing page, HUD + demo console.</span>
+        <span class="go">OPEN ↗</span>
+      </a>
+      <a class="app-card" href="/claims/" data-hub="/claims/" data-pages="https://casperinc6-source.github.io/claim-finder/">
+        <span class="mount">/claims · :3007</span>
+        <span class="name">ClaimFinder</span>
+        <span class="desc">Official unclaimed-money directory, all 50 states + DC, plus surplus-auction sources and a claim tracker.</span>
+        <span class="go">OPEN ↗</span>
+      </a>
+      <a class="app-card" href="/casper/" data-hub="/casper/" data-pages="https://github.com/casperinc6-source/casperinc6-source">
+        <span class="mount">/casper · :3001</span>
+        <span class="name">Casper Inc. Travel</span>
+        <span class="desc">Trip booking with transactional seat claims and real Stripe Checkout.</span>
+        <span class="go">OPEN ↗</span>
+      </a>
+      <a class="app-card" href="/growth/" data-hub="/growth/" data-pages="https://github.com/casperinc6-source/zero-growth-app">
+        <span class="mount">/growth · :3002</span>
+        <span class="name">Zero → Growth</span>
+        <span class="desc">Income/expense tracker that draws your cumulative curve from $0.</span>
+        <span class="go">OPEN ↗</span>
+      </a>
+      <a class="app-card" href="/bots/" data-hub="/bots/" data-pages="https://github.com/casperinc6-source/conway-automoton-survivalbots">
+        <span class="mount">/bots · :3004</span>
+        <span class="name">Survival Bots</span>
+        <span class="desc">Predator-prey ecology with evolvable genes: speed, sense, appetite.</span>
+        <span class="go">OPEN ↗</span>
+      </a>
+      <a class="app-card" href="/conway/" data-hub="/conway/" data-pages="https://github.com/casperinc6-source/automaton-conway">
+        <span class="mount">/conway · :3003</span>
+        <span class="name">Conway Life</span>
+        <span class="desc">Game of Life with presets, painting, and age tinting.</span>
+        <span class="go">OPEN ↗</span>
+      </a>
+      <a class="app-card" href="/clips/" data-hub="/clips/" data-pages="https://github.com/casperinc6-source/paperclip-maximizer">
+        <span class="mount">/clips · :3005</span>
+        <span class="name">Paperclip Maximizer</span>
+        <span class="desc">The idle game about turning everything into clips. Persists in SQLite.</span>
+        <span class="go">OPEN ↗</span>
+      </a>
+      <a class="app-card" href="/cobra/" data-hub="/cobra/" data-pages="https://github.com/casperinc6-source/beige-cobras-scream">
+        <span class="mount">/cobra · :3000</span>
+        <span class="name">Beige Cobras Scream</span>
+        <span class="desc">The scaffold that started it all — minimal zero-dep app shell.</span>
+        <span class="go">OPEN ↗</span>
+      </a>
+      <a class="app-card" href="/redteam/" data-hub="/redteam/" data-pages="https://github.com/casperinc6-source/fuse-hub">
+        <span class="mount">/redteam · :3009</span>
+        <span class="name">AI Red Team</span>
+        <span class="desc">promptfoo probe scans of the fleet's own endpoints — traversal, dotfiles, malformed bodies, wrong verbs.</span>
+        <span class="go">OPEN ↗</span>
+      </a>
+      <a class="app-card" href="/pup/" data-hub="/pup/" data-pages="https://github.com/casperinc6-source/fuse-hub">
+        <span class="mount">/pup · :3010</span>
+        <span class="name">Pup</span>
+        <span class="desc">A little dog that reads the fleet on command, runs to any app, and barks when one goes down.</span>
+        <span class="go">OPEN ↗</span>
+      </a>
+      <a class="app-card" href="/" data-hub="/" data-pages="https://github.com/casperinc6-source/fuse-hub">
+        <span class="mount">hub · :4000</span>
+        <span class="name">fuse-hub</span>
+        <span class="desc">One command launches and proxies all eleven apps, with auto-restart.</span>
+        <span class="go">OPEN ↗</span>
+      </a>
+    </div>
+    <div class="fleet-foot" id="fleet-foot">RUNNING UNDER FUSE-HUB · <a href="/">HUB INDEX</a></div>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<hr class="divider" />
+<section id="faq">
+  <div class="wrap">
+    <div class="eyebrow">FAQ</div>
+    <h2>Asked before launch. Answered anyway.</h2>
+    <div class="faq">
+      <details open>
+        <summary>Does JARVIS send my screen or files to a server?</summary>
+        <p>No. Wake word, commands and screen reads are processed on your machine. The only network calls are the live-search queries you explicitly ask for — and Pro's encrypted sync between machines you own.</p>
+      </details>
+      <details>
+        <summary>What stops it from doing something destructive?</summary>
+        <p>Every irreversible action — deleting, sending, purchasing, killing processes — requires a spoken or clicked confirmation. You can also pin a per-app allowlist so some software is simply out of reach.</p>
+      </details>
+      <details>
+        <summary>Which platforms are supported?</summary>
+        <p>macOS 13+, Windows 11, and the major Linux desktops (GNOME, KDE). The core voice loop ships everywhere; deep window management follows each OS's native APIs.</p>
+      </details>
+      <details>
+        <summary>Can it work fully offline?</summary>
+        <p>Yes — everything except live web search runs with the network cable pulled. That's the point of local-first: your assistant works in airplane mode.</p>
+      </details>
+      <details>
+        <summary>How is Pro billed?</summary>
+        <p>$12 per month, or $10 per month billed annually — save 17%. Card or bank transfer, cancel anytime from the app. Personal stays free forever — it is not a trial.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LIVE DEMO ============ -->
+<section id="demo">
+  <div class="wrap">
+    <div class="eyebrow">Live demo</div>
+    <h2>Don't take our word. Take a command.</h2>
+    <p>Type below — this console runs real rules in your browser, in JARVIS's voice. No cloud, no sign-up, no tricks.</p>
+    <div class="demo-wrap">
+      <div class="demo-titlebar">
+        <div class="dots"><i></i><i></i><i></i></div>
+        <div class="t">JARVIS · interactive console</div>
+        <div class="demo-status" id="demo-status">LISTENING</div>
+      </div>
+      <div class="demo-log" id="demo-log" aria-live="polite"></div>
+      <form class="demo-input" id="demo-form">
+        <span class="prompt">❯</span>
+        <input id="demo-input" autocomplete="off" spellcheck="false" maxlength="140" placeholder='say something like "open figma and slack side by side"' />
+        <button class="btn btn-primary btn-small" type="submit">Send</button>
+      </form>
+    </div>
+    <div class="demo-chips">
+      <button class="demo-chip" data-cmd="open figma and slack side by side">"Open Figma and Slack side by side"</button>
+      <button class="demo-chip" data-cmd="what's eating my cpu?">"What's eating my CPU?"</button>
+      <button class="demo-chip" data-cmd="remember that the wifi password is in the vault">"Remember the wifi password is in the vault"</button>
+      <button class="demo-chip" data-cmd="summarize what's on my screen">"Summarize what's on my screen"</button>
+      <button class="demo-chip" data-cmd="search: does the new spec break our api?">"Search: does the new spec break our API?"</button>
+      <button class="demo-chip" data-cmd="clean up my disk">"Clean up my disk"</button>
+      <button class="demo-chip" data-cmd="kill node">"Kill node"</button>
+      <button class="demo-chip" data-cmd="help">"What can you do?"</button>
+    </div>
+    <div class="demo-foot">RUNS 100% IN YOUR BROWSER · ZERO TELEMETRY · THE REAL JARVIS ADDS MICROPHONE + SYSTEM ACCESS</div>
+  </div>
+</section>
+
+<!-- ============ FINAL CTA (DealMachine pattern) ============ -->
+<section class="final">
+  <div class="wrap">
+    <h2>Stop clicking. <span style="color:var(--cyan)">Start saying.</span></h2>
+    <p style="max-width:520px;margin:0 auto 30px">Your computer already knows how to do all of this. JARVIS just takes the orders.</p>
+    <div class="ctas" style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:0">
+      <button class="btn btn-primary js-get">Get JARVIS</button>
+      <a class="btn btn-secondary" href="#">Read the Docs</a>
+    </div>
+    <div class="fine">FREE PLAN FOREVER · NO CREDIT CARD · 90-SECOND SETUP</div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>J.A.R.V.I.S — VOICE OPERATING LAYER</span>
+    <span>BUILD <a href="#">0.9.4</a> · <a href="#fleet">FLEET</a> · <a href="https://github.com/casperinc6-source" target="_blank" rel="noopener">GITHUB</a> · <a href="#">PRIVACY</a></span>
+  </div>
+</footer>
+
+<!-- ============ DOWNLOAD MODAL ============ -->
+<div class="modal-backdrop" id="dl-modal" role="dialog" aria-modal="true" aria-labelledby="dl-title">
+  <div class="modal">
+    <div class="titlebar">
+      <div class="dots"><i></i><i></i><i></i></div>
+      <div class="t" id="dl-title">Get JARVIS</div>
+      <div class="x" id="dl-close" role="button" aria-label="Close">✕</div>
+    </div>
+    <div class="body">
+      <h3>Download JARVIS</h3>
+      <div class="sub">BUILD 0.9.4 · VOICE OPERATING LAYER</div>
+      <div class="plan-tag" id="dl-plan"></div>
+      <div class="dl-rows">
+        <div class="dl-row" data-os="mac">
+          <span class="pf">MAC</span>
+          <span class="meta"><b>macOS 13+</b><span>jarvis-0.9.4.dmg · 38 MB · Apple Silicon &amp; Intel</span></span>
+          <button class="btn btn-secondary btn-small dl-btn">Download</button>
+        </div>
+        <div class="dl-row" data-os="win">
+          <span class="pf">WIN</span>
+          <span class="meta"><b>Windows 11</b><span>jarvis-setup-0.9.4.exe · 42 MB · x64</span></span>
+          <button class="btn btn-secondary btn-small dl-btn">Download</button>
+        </div>
+        <div class="dl-row" data-os="linux">
+          <span class="pf">LNX</span>
+          <span class="meta"><b>Linux · GNOME / KDE</b><span>jarvis-0.9.4.AppImage · 45 MB · x64</span></span>
+          <button class="btn btn-secondary btn-small dl-btn">Download</button>
+        </div>
+      </div>
+      <div class="dl-progress" id="dl-progress"><div class="fill"></div></div>
+      <div class="note" id="dl-note"></div>
+      <div class="fine">FREE PLAN FOREVER · NO ACCOUNT REQUIRED · PERMISSIONS REVOCABLE · UNINSTALL ANYTIME</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---- fleet links: resolve to the right target for where this page is served.
+  // Under fuse-hub the siblings sit at the hub root (/growth/, /claims/, …) —
+  // prefixing them with /jarvis/ pointed at this app's own 404s. On GitHub
+  // Pages the fallback is each project's live site or repo.
+  const UNDER_HUB = location.pathname.startsWith('/jarvis/');
+  document.querySelectorAll('.app-card').forEach((a) => {
+    const target = UNDER_HUB ? a.dataset.hub : a.dataset.pages;
+    if (target) a.href = target;
+  });
+  const fleetFoot = document.getElementById('fleet-foot');
+  if (fleetFoot) {
+    fleetFoot.innerHTML = UNDER_HUB
+      ? 'RUNNING UNDER FUSE-HUB · <a href="/">HUB INDEX</a>'
+      : 'STATIC BUILD · <a href="https://github.com/casperinc6-source" target="_blank" rel="noopener">ALL 9 REPOS ON GITHUB</a>';
+  }
+
+  // ---- animated telemetry -------------------------------------------------
+  const set = (id, pct) => {
+    document.getElementById('f-' + id).style.width = pct + '%';
+    document.getElementById('t-' + id).textContent = pct + '%';
+  };
+  function tickTele() {
+    set('cpu', 14 + Math.round(Math.random() * 30));
+    set('mem', 41 + Math.round(Math.random() * 14));
+    set('net', 5 + Math.round(Math.random() * 45));
+    set('agt', 30 + Math.round(Math.random() * 25));
+  }
+  tickTele(); setInterval(tickTele, 2200);
+
+  // ---- rotating activity log ---------------------------------------------
+  const LINES = [
+    ['» "open slack and the roadmap"', 'ok — 2 windows tiled'],
+    ['» "describe my screen"', '4 windows described · 0 bytes left the device'],
+    ['» disk watch', '91% full → cleaned 3.2 GB of caches'],
+    ['» "reply to Sam with Q3 numbers"', 'draft ready — awaiting "send it"'],
+    ['» live search: "spec changes this week"', '9 sources cited'],
+    ['» "reschedule the 3pm"', 'moved to Thu 10:00 · invites updated'],
+    ['» process watch', 'node — runaway at 340% CPU — confirm to kill'],
+    ['» "remember: standup moved to 9:15"', 'stored locally · memory/standup'],
+    ['» camera', 'porch: 1 parcel detected · 0 faces stored'],
+    ['» "focus mode"', 'Slack paused · notifications held 90 min'],
+  ];
+  const logEl = document.getElementById('log');
+  let li = 0;
+  function stamp() { return new Date().toTimeString().slice(0, 8); }
+  function pushCustom(cmd, res) {
+    const row = document.createElement('div');
+    row.innerHTML = '<span class="t">' + stamp() + '</span> ' +
+      cmd.replace(/</g, '&lt;') + '<br><span class="ok">  ↳ ' + res.replace(/</g, '&lt;') + '</span>';
+    logEl.prepend(row);
+    while (logEl.children.length > 7) logEl.removeChild(logEl.lastChild);
+  }
+  function pushLog() {
+    const [cmd, res] = LINES[li % LINES.length]; li++;
+    pushCustom(cmd, res);
+  }
+  pushLog(); pushLog(); pushLog();
+  setInterval(pushLog, 2600);
+
+  // ---- popular voice-command chips: speak into the HUD --------------------
+  document.querySelectorAll('.chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      pushCustom(chip.dataset.cmd, chip.dataset.res);
+      document.querySelector('.hud').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+
+  // ---- billing toggle (DealMachine pattern) --------------------------------
+  const sw = document.getElementById('billing-switch');
+  function toggleBilling() {
+    const annual = sw.classList.toggle('on');
+    sw.setAttribute('aria-checked', String(annual));
+    document.getElementById('pro-price').innerHTML = annual
+      ? '$10 <small>/ month</small>' : '$12 <small>/ month</small>';
+    document.getElementById('pro-fine').textContent = annual
+      ? 'billed annually · save 17%' : 'billed monthly · cancel anytime';
+  }
+  sw.addEventListener('click', toggleBilling);
+  sw.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleBilling(); } });
+
+  // ---- macOS menubar clock ---------------------------------------------------
+  const clockEl = document.getElementById('clock');
+  function tickClock() {
+    const d = new Date();
+    clockEl.textContent = d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+      + ' ' + d.toTimeString().slice(0, 5);
+  }
+  tickClock(); setInterval(tickClock, 10000);
+
+  // ---- Get JARVIS download modal ----------------------------------------------
+  function detectOS() {
+    const ua = navigator.userAgent;
+    if (/Macintosh|Mac OS X/.test(ua)) return 'mac';
+    if (/Windows/.test(ua)) return 'win';
+    if (/Linux/.test(ua)) return 'linux';
+    return 'mac';
+  }
+  const modal = document.getElementById('dl-modal');
+  const note = document.getElementById('dl-note');
+  const planTag = document.getElementById('dl-plan');
+  const progress = document.getElementById('dl-progress');
+  const progressFill = progress.querySelector('.fill');
+  let lastFocus = null;
+
+  function openModal(plan) {
+    lastFocus = document.activeElement;
+    note.textContent = ''; note.classList.remove('ok');
+    progress.classList.remove('show'); progressFill.style.width = '0%';
+    if (plan) { planTag.textContent = 'PLAN: ' + plan.toUpperCase(); planTag.style.display = 'inline-block'; }
+    else planTag.style.display = 'none';
+    const os = detectOS();
+    document.querySelectorAll('.dl-row').forEach((row) => {
+      const rec = row.dataset.os === os;
+      row.classList.toggle('rec', rec);
+      const btn = row.querySelector('.dl-btn');
+      btn.classList.toggle('btn-primary', rec);
+      btn.classList.toggle('btn-secondary', !rec);
+      let tag = row.querySelector('.rec-tag');
+      if (rec && !tag) {
+        tag = document.createElement('span');
+        tag.className = 'rec-tag'; tag.textContent = 'YOUR OS';
+        row.querySelector('.meta').after(tag);
+      }
+      if (!rec && tag) tag.remove();
+    });
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    const first = modal.querySelector('.dl-btn.btn-primary') || modal.querySelector('.dl-btn');
+    if (first) first.focus();
+  }
+  function closeModal() {
+    modal.classList.remove('open');
+    document.body.style.overflow = '';
+    if (lastFocus) lastFocus.focus();
+  }
+  document.querySelectorAll('.js-get').forEach((b) =>
+    b.addEventListener('click', (e) => { e.preventDefault(); openModal(b.dataset.plan || ''); }));
+  document.getElementById('dl-close').addEventListener('click', closeModal);
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modal.classList.contains('open')) closeModal(); });
+
+  document.querySelectorAll('.dl-btn').forEach((btn) =>
+    btn.addEventListener('click', () => {
+      const row = btn.closest('.dl-row');
+      const file = row.querySelector('.meta span').textContent.split('·')[0].trim();
+      note.classList.remove('ok');
+      note.textContent = 'preparing ' + file + ' …';
+      progress.classList.add('show');
+      let p = 0;
+      const iv = setInterval(() => {
+        p = Math.min(100, p + 8 + Math.random() * 14);
+        progressFill.style.width = p + '%';
+        if (p >= 100) {
+          clearInterval(iv);
+          note.classList.add('ok');
+          note.textContent = 'demo page — the installer isn\u2019t bundled yet. everything else here is real.';
+          setTimeout(() => progress.classList.remove('show'), 600);
+        }
+      }, 120);
+    }));
+
+  // ---- interactive HUD demo: a tiny rule-based JARVIS ------------------------
+  const D = {
+    log: document.getElementById('demo-log'),
+    form: document.getElementById('demo-form'),
+    input: document.getElementById('demo-input'),
+    status: document.getElementById('demo-status'),
+  };
+  const demoState = { memory: [], layout: false, pendingKill: null };
+
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const now = () => new Date().toTimeString().slice(0, 5);
+  const think = () => '<span class="cursor"></span>';
+
+  function bubble(kind, who, html) {
+    const el = document.createElement('div');
+    el.className = 'msg ' + kind;
+    el.innerHTML = '<div class="who">' + who + '</div><div class="bubble">' + html + '</div>';
+    D.log.appendChild(el);
+    D.log.scrollTop = D.log.scrollHeight;
+    while (D.log.children.length > 40) D.log.removeChild(D.log.firstChild);
+    return el;
+  }
+  function userSaid(text) { bubble('user', 'YOU · ' + now(), esc(text)); }
+
+  function say(html, delay) {
+    D.status.textContent = 'PROCESSING';
+    const el = bubble('jarvis', 'JARVIS · ' + now(), think());
+    setTimeout(() => {
+      const bubbleEl = el.querySelector('.bubble');
+      const nodes = [...bubbleEl.childNodes];
+      bubbleEl.innerHTML = '';
+      let nodeIdx = 0;
+      function typeNode() {
+        if (nodeIdx >= nodes.length) { D.status.textContent = 'LISTENING'; return; }
+        const node = nodes[nodeIdx];
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.textContent;
+          let i = 0;
+          const t = document.createTextNode('');
+          bubbleEl.appendChild(t);
+          const iv = setInterval(() => {
+            t.textContent = text.slice(0, ++i);
+            D.log.scrollTop = D.log.scrollHeight;
+            if (i >= text.length) { clearInterval(iv); nodeIdx++; typeNode(); }
+          }, 9);
+        } else {
+          bubbleEl.appendChild(node);
+          nodeIdx++;
+          typeNode();
+        }
+      }
+      typeNode();
+    }, delay || 340 + Math.random() * 380);
+  }
+
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const partOfDay = () => { const h = new Date().getHours(); return h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening'; };
+
+  const RULES = [
+    { re: /^\s*(hi|hello|hey|yo)\b/i,
+      fn: () => say('Good ' + partOfDay() + '. All systems nominal. What are we doing first?') },
+    { re: /\bhelp\b|what can you do/i,
+      fn: () => say('Try me with:<br>' +
+        '<span class="cyan">windows</span> — “open figma and slack side by side”<br>' +
+        '<span class="cyan">health</span> — “what’s eating my cpu?” or “clean up my disk”<br>' +
+        '<span class="cyan">memory</span> — “remember the wifi password is in the vault”<br>' +
+        '<span class="cyan">screen</span> — “summarize what’s on my screen”<br>' +
+        '<span class="cyan">search</span> — “search: does the spec break our api?”<br>' +
+        '<span class="cyan">danger</span> — “kill node” (watch the confirmation)') },
+    { re: /\b(remember|note)\b\s*(that\s+)?(.*)/i,
+      fn: (m) => {
+        const fact = (m[3] || '').trim();
+        if (!fact) { say('Remember <em>what</em>, exactly? Give me the whole sentence.'); return; }
+        demoState.memory.push(fact);
+        say('Stored locally: <span class="cyan">“' + esc(fact) + '”</span>.<br><span class="dim">memory/' + demoState.memory.length + ' · 0 bytes left this browser</span>');
+      } },
+    { re: /what do you remember|your memory|recall/i,
+      fn: () => say(demoState.memory.length
+        ? 'In local memory this session:<br>' + demoState.memory.map((f, i) => '<span class="cyan">' + (i + 1) + '.</span> ' + esc(f)).join('<br>')
+        : 'Memory is empty. Start with <span class="cyan">“remember …”</span> and I will keep it.') },
+    { re: /(open|launch|start)\b.*(side by side|split|next to|together)|(layout|arrange|tile)/i,
+      fn: () => {
+        demoState.layout = !demoState.layout;
+        say('Done — <span class="cyan">two windows tiled</span>, mail docked left, terminal kept visible.<br><span class="dim">layout #' + (demoState.layout ? 7 : 3) + ' · the real JARVIS drives native window APIs</span>');
+      } },
+    { re: /\b(cpu|runaway|process)\b/i,
+      fn: () => say('Top consumer right now: <span class="warn">node — ' + (220 + Math.floor(Math.random() * 160)) + '% CPU</span>.<br><span class="dim">(this page is pretending — your real CPU is fine)</span><br>Say <span class="cyan">“kill node”</span> to see the two-step confirmation.') },
+    { re: /\bkill\s+(\S+)/i,
+      fn: (m) => {
+        const proc = m[1];
+        if (demoState.pendingKill === proc) {
+          demoState.pendingKill = null;
+          say('<span class="warn">' + esc(proc) + ' terminated.</span> That’s the whole trick: irreversible actions always ask twice.<br><span class="dim">real JARVIS: per-app allowlists · spoken confirmation · audit log</span>');
+        } else {
+          demoState.pendingKill = proc;
+          say('<span class="warn">' + esc(proc) + ' is consuming heavy CPU.</span> Terminate it? This cannot be undone.<br><span class="dim">type “kill ' + esc(proc) + '” again to confirm</span>');
+        }
+      } },
+    { re: /(clean|free|clear).*(disk|space|storage|cache)|\bdisk\b/i,
+      fn: () => say('Scanned 3 volumes · found <span class="cyan">3.2 GB</span> of caches, 4 stale disk images, 1 abandoned render temp.<br><span class="warn">Cleaned 3.2 GB</span> — risky items need your say-so, so I left them.') },
+    { re: /(summarize|describe|read|what.s on|whats on).*(screen|looking at)|\bscreen\b/i,
+      fn: () => say('Reading the screen locally — <span class="cyan">4 windows</span>: a terminal mid-deploy, a design file, mail with 3 unread, and this very console.<br><span class="dim">0 bytes left the device</span>') },
+    { re: /\bsearch\b\s*[:\-]?\s*(.*)/i,
+      fn: (m) => {
+        const q = (m[1] || '').trim();
+        say('Live search' + (q ? ' for <span class="cyan">“' + esc(q) + '”</span>' : '') + ': 9 sources scanned, 4 relevant.<br><span class="dim">[1] spec repo · [2] changelog · [3] CI thread · …</span><br><span class="warn">The real JARVIS cites sources you can click.</span>');
+      } },
+    { re: /(focus|do not disturb|silence)/i,
+      fn: () => say('Focus mode: <span class="cyan">notifications held 90 min</span>, Slack paused, calendar respected. Anything marked urgent still gets through.') },
+    { re: /(thank|nice|cool|impressive|love it|great)/i,
+      fn: () => say('Noted. Efficiency is its own reward. Next?') },
+    { re: /(who are you|what are you)/i,
+      fn: () => say('A demo of <span class="cyan">J.A.R.V.I.S</span> — the voice layer for your computer — running entirely in this tab. The real one adds a microphone, system permissions and local-first memory.') },
+  ];
+
+  function respond(text) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    userSaid(trimmed);
+    for (const r of RULES) {
+      const m = trimmed.match(r.re);
+      if (m) { r.fn(m); return; }
+    }
+    say('Beyond this sandbox — but the pattern holds: I would parse it, pick the apps, do it.<br><span class="dim">type “help” for what this console understands</span>');
+  }
+
+  D.form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const v = D.input.value;
+    D.input.value = '';
+    respond(v);
+  });
+  document.querySelectorAll('.demo-chip').forEach((chip) =>
+    chip.addEventListener('click', () => respond(chip.dataset.cmd)));
+
+  say('JARVIS demo console online. Type a command, or tap a suggestion. Try <span class="cyan">“open figma and slack side by side”</span>.', 500);
+</script>
+</body>
+</html>

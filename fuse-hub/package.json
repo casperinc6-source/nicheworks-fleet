@@ -1,0 +1,14 @@
+{
+  "name": "fuse-hub",
+  "version": "0.1.0",
+  "description": "fuse-hub — run every sibling app behind one port with one command. Zero dependencies.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

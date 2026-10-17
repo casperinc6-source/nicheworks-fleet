@@ -1,0 +1,37 @@
+# Anti-sleep keepalive: pings the Render service every 10 minutes so the
+# free tier's 15-minute idle timeout never fires. Runs on GitHub's clock,
+# costs nothing, and works even while your computer is off.
+#
+# SETUP: none by hand — the deploy flow sets a repo VARIABLE named RENDER_URL
+# (Settings → Secrets and variables → Actions → Variables). Variables are used
+# instead of secrets because they're non-sensitive (a public service URL) and
+# can be managed by tooling.
+#
+# NOTE: scheduled workflows only run on the default branch, and GitHub
+# disables schedules after ~60 days of repo inactivity — any push resets
+# that timer (or re-enable under Actions → Keepalive fleet awake).
+
+name: Keepalive fleet awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {} # manual run button for testing
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping healthz
+        run: |
+          URL="${{ vars.RENDER_URL }}"
+          if [ -z "$URL" ]; then
+            echo "RENDER_URL variable not set yet — skipping ping."
+            exit 0
+          fi
+          code=$(curl -s -o /dev/null -m 60 -w "%{http_code}" "$URL/healthz")
+          echo "GET $URL/healthz -> $code"
+          [ "$code" = "200" ]

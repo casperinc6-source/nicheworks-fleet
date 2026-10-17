@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deception Grid — the trap room</title>
+<style>
+  :root { --bg:#0d0709; --panel:#170f13; --line:#33222a; --ink:#f7e9ee; --dim:#a08490; --rose:#ff7ba6; --lime:#7ee787; --amber:#e3b341; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { padding:2.2rem 1.2rem 1rem; max-width:940px; margin:0 auto; }
+  h1 { margin:0; font-size:1.7rem; letter-spacing:.06em; } h1 b { color:var(--rose); }
+  main { max-width:940px; margin:0 auto; padding:0 1.2rem 3rem; display:grid; grid-template-columns:1fr 1fr; gap:1.1rem; }
+  @media (max-width:760px){ main { grid-template-columns:1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:1rem 1.1rem; }
+  h2 { font-size:.95rem; margin:.1rem 0 .6rem; letter-spacing:.05em; }
+  table { width:100%; border-collapse:collapse; } td,th { text-align:left; padding:.3rem .45rem; border-bottom:1px solid var(--line); font-size:.84rem; }
+  input, button { font:inherit; } input { width:100%; padding:.55rem .6rem; background:#0c0507; border:1px solid var(--line); border-radius:8px; color:var(--ink); }
+  button { margin-top:.6rem; padding:.6rem .9rem; background:var(--rose); color:#20060f; border:0; border-radius:8px; font-weight:700; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--rose); border:1px solid var(--line); }
+  .pill { border:1px solid var(--line); border-radius:999px; padding:.1rem .55rem; color:var(--dim); font-size:.75rem; }
+  .muted { color:var(--dim); font-size:.82rem; }
+  .trip { border-left:3px solid var(--rose); padding:.3rem .6rem; margin:.35rem 0; background:#140b0f; font-size:.82rem; }
+  .locked { filter:blur(4px); opacity:.6; }
+  code { background:#0c0507; padding:.05rem .35rem; border-radius:4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🕸️ DECEPTION <b>GRID</b> <span class="muted">· the trap room</span></h1>
+  <p class="muted">Planted decoys and canary tokens. Touching one is proof of intrusion — every hit is logged with the caller's IP and user-agent. Free shows 3 trips; the net unlocks full intelligence.</p>
+</header>
+<main>
+  <div class="card">
+    <h2>Planted decoys</h2>
+    <table><tbody id="decoys"></tbody></table>
+    <p class="muted">Any request to a decoy path is answered with believable fake content and logged.</p>
+  </div>
+
+  <div class="card">
+    <h2>Recent trips</h2>
+    <div id="counts" class="muted"></div>
+    <div id="trips"></div>
+    <button class="ghost" id="refresh">Refresh</button>
+  </div>
+
+  <div class="card">
+    <h2>Mint a canary</h2>
+    <input id="label" placeholder="label (e.g. finance-share, secrets.pdf)" />
+    <button id="mint">Create canary token</button>
+    <div id="canary" class="muted"></div>
+  </div>
+
+  <div class="card">
+    <h2>Net status</h2>
+    <div class="row"><span class="pill" id="tier">free</span></div>
+    <p class="muted" id="statusline"></p>
+    <button class="ghost" id="net">Enable deception net ($49/mo)</button>
+  </div>
+</main>
+<script>
+  const $ = (s) => document.querySelector(s);
+  const api = (p) => 'api/' + p;
+
+  async function loadDecoys() {
+    const j = await fetch(api('decoys')).then(r => r.json());
+    $('#decoys').innerHTML = j.decoys.map(d => `<tr><td><code>${d.path}</code></td><td class="muted">${d.type}</td></tr>`).join('');
+  }
+
+  async function loadTrips() {
+    const j = await fetch(api('trips')).then(r => r.json());
+    $('#counts').textContent = (j.counts || []).map(c => `${c.kind}: ${c.n}`).join(' · ') || 'no trips yet';
+    const rows = j.trips.map(t => `<div class="trip">${t.kind} · <code>${t.path}</code>${t.ip ? ' · ' + t.ip : ''}${t.ua ? '<br><span class="muted">' + t.ua + '</span>' : ''}<div class="muted">${t.at}</div></div>`).join('');
+    const locked = j.locked ? `<div class="trip locked">${j.lockedTrips} more trips hidden</div><p class="muted">${j.upgrade || ''}</p>` : '';
+    $('#trips').innerHTML = rows + locked;
+  }
+
+  async function loadStatus() {
+    const j = await fetch(api('premium/status')).then(r => r.json());
+    $('#tier').textContent = j.tier;
+    $('#statusline').textContent = j.message;
+  }
+
+  $('#mint').onclick = async () => {
+    const r = await fetch(api('canary'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ label: $('#label').value }) });
+    const j = await r.json();
+    $('#canary').innerHTML = `token <code>${j.token}</code><br>plant this URL: <code>${j.url}</code><br><span class="muted">${j.hint}</span>`;
+  };
+
+  $('#refresh').onclick = loadTrips;
+  $('#net').onclick = async () => {
+    const r = await fetch(api('premium/subscribe'), { method:'POST', headers:{'Content-Type':'application/json'}, body: '{}' });
+    const j = await r.json();
+    $('#statusline').textContent = j.message + ' · ' + JSON.stringify(j.payment);
+    loadStatus(); loadTrips();
+  };
+
+  loadDecoys(); loadTrips(); loadStatus();
+</script>
+</body>
+</html>

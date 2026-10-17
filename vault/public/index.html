@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vault — offline file storage</title>
+<style>
+  :root { --bg:#0a0e12; --panel:#111820; --line:#1f2b36; --ink:#e8f0f6; --dim:#7d8f9c; --teal:#57d9c4; --amber:#e3b341; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { padding:2.2rem 1.2rem 1rem; max-width:880px; margin:0 auto; }
+  h1 { margin:0; font-size:1.7rem; letter-spacing:.06em; } h1 b { color:var(--teal); }
+  main { max-width:880px; margin:0 auto; padding:0 1.2rem 3rem; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:1rem 1.1rem; margin-top:1.1rem; }
+  .bar { height:10px; background:#0a1216; border:1px solid var(--line); border-radius:999px; overflow:hidden; margin:.5rem 0; }
+  .bar > i { display:block; height:100%; background:var(--teal); }
+  table { width:100%; border-collapse:collapse; } td,th { text-align:left; padding:.35rem .5rem; border-bottom:1px solid var(--line); font-size:.86rem; }
+  button, input { font:inherit; } input { padding:.55rem .6rem; background:#080d10; border:1px solid var(--line); border-radius:8px; color:var(--ink); }
+  button { padding:.6rem .95rem; background:var(--teal); color:#04211c; border:0; border-radius:8px; font-weight:700; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--teal); border:1px solid var(--line); }
+  .muted { color:var(--dim); font-size:.85rem; } a { color:var(--teal); }
+  .row { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🗄️ VAULT <span class="muted">· offline file storage</span></h1>
+  <p class="muted">Your own file vault — bytes live on this machine, content-addressed by SHA-256 so identical files are stored once. No cloud. Free 100 MB; Pro 5 GB.</p>
+</header>
+<main>
+  <div class="card">
+    <div class="row">
+      <input type="file" id="file" />
+      <button id="upload">Upload</button>
+      <button class="ghost" id="refresh">Refresh</button>
+      <button class="ghost" id="pro">Go Pro ($5/mo)</button>
+    </div>
+    <div class="bar"><i id="usagebar" style="width:0%"></i></div>
+    <div class="muted" id="usage">…</div>
+  </div>
+  <div class="card">
+    <table><thead><tr><th>Name</th><th>Size</th><th>SHA-256</th><th></th></tr></thead><tbody id="files"></tbody></table>
+  </div>
+</main>
+<script>
+  const $ = (s) => document.querySelector(s);
+  const api = (p) => 'api/' + p;
+  const fmt = (n) => n < 1024 ? n + ' B' : n < 1048576 ? (n/1024).toFixed(1) + ' KB' : (n/1048576).toFixed(2) + ' MB';
+
+  async function load() {
+    const j = await fetch(api('files')).then(r => r.json());
+    $('#usage').textContent = `${fmt(j.used)} of ${fmt(j.quota)} used · ${j.tier} tier · ${fmt(j.remaining)} free`;
+    $('#usagebar').style.width = Math.min(100, (j.used / j.quota) * 100) + '%';
+    $('#files').innerHTML = j.files.map(f => `<tr><td>${f.name}</td><td class="muted">${fmt(f.size)}</td><td class="muted">${f.sha256.slice(0,16)}…</td>
+      <td><a href="${api('files/' + f.id)}">download</a> · <a href="#" data-del="${f.id}">del</a></td></tr>`).join('');
+  }
+
+  document.addEventListener('click', async (e) => {
+    const id = e.target.getAttribute && e.target.getAttribute('data-del');
+    if (!id) return;
+    e.preventDefault();
+    await fetch(api('files/' + id), { method:'DELETE' });
+    load();
+  });
+
+  $('#upload').onclick = async () => {
+    const f = $('#file').files[0];
+    if (!f) return;
+    const r = await fetch(api('files') + '?name=' + encodeURIComponent(f.name), { method:'POST', headers:{'Content-Type': f.type || 'application/octet-stream'}, body: f });
+    if (!r.ok) { const j = await r.json(); alert(j.error + (j.upgrade ? ' — ' + j.upgrade : '')); return; }
+    load();
+  };
+  $('#refresh').onclick = load;
+  $('#pro').onclick = async () => {
+    const j = await fetch(api('premium/subscribe'), { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' }).then(r => r.json());
+    alert(j.message + '\n' + JSON.stringify(j.payment));
+    load();
+  };
+  load();
+</script>
+</body>
+</html>

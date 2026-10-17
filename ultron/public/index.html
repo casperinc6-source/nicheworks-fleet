@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ultron — adversary simulator</title>
+<style>
+  :root { --bg:#0b0708; --panel:#170f12; --line:#341f25; --ink:#f8e9ee; --dim:#a97f8c; --crimson:#ff5c72; --green:#7ee787; --amber:#e3b341; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { padding:2.2rem 1.2rem 1rem; max-width:900px; margin:0 auto; }
+  h1 { margin:0; font-size:1.7rem; letter-spacing:.06em; } h1 b { color:var(--crimson); }
+  main { max-width:900px; margin:0 auto; padding:0 1.2rem 3rem; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:1rem 1.1rem; margin-top:1.1rem; }
+  .row { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
+  input, select, button { font:inherit; } input, select { padding:.55rem .6rem; background:#0e080b; border:1px solid var(--line); border-radius:8px; color:var(--ink); }
+  button { padding:.6rem .95rem; background:var(--crimson); color:#200609; border:0; border-radius:8px; font-weight:700; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--crimson); border:1px solid var(--line); }
+  table { width:100%; border-collapse:collapse; } td,th { text-align:left; padding:.35rem .5rem; border-bottom:1px solid var(--line); font-size:.85rem; }
+  .pill { border:1px solid var(--line); border-radius:999px; padding:.1rem .55rem; color:var(--dim); font-size:.75rem; }
+  .repelled { color:var(--green); } .exploited { color:var(--crimson); } .inconclusive { color:var(--amber); }
+  .muted { color:var(--dim); font-size:.84rem; }
+  .step { border-left:3px solid var(--line); padding:.4rem .7rem; margin:.4rem 0; background:#120a0d; }
+  .step.exploited { border-color:var(--crimson); }
+  .step.repelled { border-color:var(--green); }
+  .locked { filter:blur(4px); opacity:.6; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🤖 ULTRON <span class="muted">· adversary simulator</span></h1>
+  <p class="muted">Ultron plays the attacker against <b>your own fleet</b> and hands you the kill chain — every step it took, what it hit, and the defence that stops it. It only touches fleet members or localhost; it is not an attack tool.</p>
+</header>
+<main>
+  <div class="card">
+    <div class="row">
+      <select id="target"></select>
+      <button id="run">Unleash against my fleet</button>
+      <button class="ghost" id="status">Sentry status</button>
+    </div>
+    <div class="muted" id="log"></div>
+  </div>
+  <div class="card" id="out" hidden></div>
+  <div class="card">
+    <b>Playbook</b>
+    <table><thead><tr><th>Scenario</th><th>Aim</th><th>Defence</th></tr></thead><tbody id="scenarios"></tbody></table>
+  </div>
+</main>
+<script>
+  const $ = (s) => document.querySelector(s);
+  const api = (p) => 'api/' + p;
+
+  async function targets() {
+    const j = await fetch(api('targets')).then(r => r.json());
+    $('#target').innerHTML = j.targets.map(t => `<option value="${t.mount}">${t.name} · ${t.base}</option>`).join('');
+  }
+  async function scenarios() {
+    const j = await fetch(api('scenarios')).then(r => r.json());
+    $('#scenarios').innerHTML = j.scenarios.map(s => `<tr><td>${s.name}</td><td class="muted">${s.aim}</td><td class="muted">${s.defence}</td></tr>`).join('');
+  }
+
+  function stepHtml(s) {
+    const cls = s.verdict ? s.verdict.toLowerCase() : (s.exploited ? 'exploited' : 'repelled');
+    return `<div class="step ${cls}"><b>${s.name || s.scenario}</b> <span class="pill ${cls}">${s.verdict || (s.exploited ? 'EXPLOITED' : 'REPELLED')}</span>
+      <div class="muted">${s.attempted}</div>
+      <div class="muted">${s.evidence || ''}</div>
+      ${s.defence ? `<div class="muted">→ ${s.defence}</div>` : ''}</div>`;
+  }
+
+  $('#run').onclick = async () => {
+    $('#log').textContent = 'running the playbook…';
+    const r = await fetch(api('simulate'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ target: $('#target').value }) });
+    const j = await r.json();
+    if (r.status >= 400) { $('#log').textContent = '⚠ ' + (j.error || r.status); return; }
+    const steps = j.steps || j.sample || [];
+    $('#log').textContent = `${j.target} · ${j.exploited} exploited, ${j.survived} repelled`;
+    $('#out').hidden = false;
+    $('#out').innerHTML = `<b>Kill chain — ${j.target}</b>` + steps.map(stepHtml).join('') +
+      (j.locked ? `<div class="step locked"><b>${j.lockedSteps} more steps</b></div><p class="muted">${j.upgrade || ''}</p>` : '');
+  };
+
+  $('#status').onclick = async () => {
+    const j = await fetch(api('premium/status')).then(r => r.json());
+    $('#log').textContent = `tier: ${j.tier} · $${j.price}/mo — ${j.note} ${j.message}`;
+  };
+
+  targets(); scenarios();
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://casperinc6-source.github.io/claim-finder/sitemap.xml

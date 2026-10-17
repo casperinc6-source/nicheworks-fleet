@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Watchtower — security audit</title>
+<style>
+  :root { --bg:#0b0f0d; --panel:#111815; --line:#1f2b26; --ink:#e7f2ec; --dim:#7c948a; --lime:#7ee787; --amber:#e3b341; --red:#ff7b72; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { padding:2.2rem 1.2rem 1rem; max-width:900px; margin:0 auto; }
+  h1 { margin:0; font-size:1.7rem; letter-spacing:.06em; }
+  h1 b { color:var(--lime); }
+  .tag { color:var(--dim); }
+  main { max-width:900px; margin:0 auto; padding:0 1.2rem 3rem; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:1.1rem 1.2rem; margin-top:1.1rem; }
+  input, button { font:inherit; }
+  input { width:100%; padding:.7rem .8rem; background:#0a0e0c; border:1px solid var(--line); border-radius:8px; color:var(--ink); }
+  button { margin-top:.7rem; padding:.7rem 1rem; background:var(--lime); color:#08110c; border:0; border-radius:8px; font-weight:700; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--lime); border:1px solid var(--line); }
+  .row { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
+  .pill { border:1px solid var(--line); border-radius:999px; padding:.15rem .6rem; color:var(--dim); font-size:.8rem; }
+  .score { font-size:2.4rem; font-weight:800; }
+  .high { color:var(--red); } .medium { color:var(--amber); } .low { color:var(--dim); }
+  .finding { border-left:3px solid var(--line); padding:.5rem .7rem; margin:.5rem 0; background:#0d1411; }
+  .finding.high { border-color:var(--red); } .finding.medium { border-color:var(--amber); } .finding.low { border-color:var(--dim); }
+  .locked { filter:blur(4px); opacity:.6; pointer-events:none; }
+  code { background:#0a0e0c; padding:.05rem .35rem; border-radius:4px; }
+  .muted { color:var(--dim); font-size:.85rem; }
+  footer { max-width:900px; margin:0 auto; padding:0 1.2rem 3rem; color:var(--dim); font-size:.8rem; }
+  a { color:var(--lime); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🛰️ WATCH<b>TOWER</b> <span class="tag">· security audit as a service</span></h1>
+  <p class="muted">Real scans — security headers, exposed files, cookie flags. Free scan shows the summary; the full report and continuous monitoring are premium.</p>
+</header>
+<main>
+  <div class="card">
+    <div class="row">
+      <input id="target" placeholder="example.com or https://your-app.dev" autocomplete="off" />
+      <button id="scan">Scan now</button>
+      <button class="ghost" id="status">Premium status</button>
+    </div>
+    <p class="muted" id="hint">Scans the public surface only. Your target must be reachable from this server.</p>
+  </div>
+
+  <div class="card" id="result" hidden></div>
+
+  <div class="card">
+    <div class="row">
+      <button class="ghost" id="subscribe-report">Unlock full report</button>
+      <button class="ghost" id="subscribe-monitor">Enable monitoring</button>
+    </div>
+    <p class="muted" id="pay" ></p>
+  </div>
+</main>
+<footer>
+  Watchtower · part of the NICHEWORKS fleet. Also in the fleet: <b>Loom</b> (pattern craft), <b>Keysmith</b> (post-quantum readiness).
+</footer>
+<script>
+  const $ = (s) => document.querySelector(s);
+  const api = (p) => 'api/' + p;
+  let last = null;
+
+  async function jpost(p, body) {
+    const r = await fetch(api(p), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{}) });
+    return { status: r.status, json: await r.json() };
+  }
+  async function jget(p) { const r = await fetch(api(p)); return { status: r.status, json: await r.json() }; }
+
+  function sevBadge(n, cls) { return `<span class="${cls}">${n}</span>`; }
+
+  function render(d) {
+    last = d;
+    const locked = d.locked;
+    const findings = (d.findings || (d.sampleFinding ? [d.sampleFinding] : []));
+    const rows = findings.map(f => `<div class="finding ${f.severity}"><b>${f.title}</b> <span class="pill ${f.severity}">${f.severity}</span><div class="muted">${f.evidence||''}</div>${f.remediation?`<div class="muted">→ ${f.remediation}</div>`:''}</div>`).join('');
+    $('#result').hidden = false;
+    $('#result').innerHTML = `
+      <div class="row"><div class="score">${d.score}<span class="muted">/100</span></div>
+        <div style="flex:1">
+          <div><b>${d.target}</b></div>
+          <div class="muted">${d.total} findings · ${sevBadge(d.counts.high,'high')} high · ${sevBadge(d.counts.medium,'medium')} medium · ${sevBadge(d.counts.low,'low')} low</div>
+        </div></div>
+      ${rows}
+      ${locked ? `<div class="finding locked"><b>${d.lockedFindings} more findings</b><div class="muted">remediation steps hidden</div></div>
+        <p class="muted">${d.upgrade||''}</p>` : ''}
+    `;
+  }
+
+  $('#scan').onclick = async () => {
+    const target = $('#target').value.trim();
+    if (!target) return;
+    $('#hint').textContent = 'Scanning…';
+    const { status, json } = await jpost('scan', { target });
+    if (status >= 400) { $('#hint').textContent = 'Error: ' + (json.error || status); return; }
+    $('#hint').textContent = 'Done.';
+    render(json);
+  };
+
+  $('#status').onclick = async () => {
+    const { json } = await jget('premium/status');
+    $('#pay').textContent = `tier: ${json.tier} · report $${json.reportPrice} · monitoring $${json.monitoringPrice}/mo — ${json.message}`;
+  };
+
+  $('#subscribe-report').onclick = async () => {
+    const { json } = await jpost('premium/subscribe', { tier: 'report' });
+    $('#pay').textContent = json.message + ' · ' + JSON.stringify(json.payment);
+    if (last) render(last);
+  };
+  $('#subscribe-monitor').onclick = async () => {
+    const { json } = await jpost('premium/subscribe', { tier: 'monitoring' });
+    $('#pay').textContent = json.message + ' · ' + JSON.stringify(json.payment);
+  };
+</script>
+</body>
+</html>

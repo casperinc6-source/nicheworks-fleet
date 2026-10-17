@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>beige-cobras-scream</title>
+<style>
+  :root { --sand:#f0e6d2; --ink:#333; --line:#d8c9a8; --accent:#b8860b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--sand); color:var(--ink); font:16px/1.6 system-ui, sans-serif; display:grid; place-items:center; min-height:100vh; }
+  main { text-align:center; padding:2.5rem 1.4rem; max-width:620px; }
+  h1 { font-size:2.1rem; margin:.2rem 0; }
+  .row { display:flex; gap:.6rem; justify-content:center; flex-wrap:wrap; margin-top:1.2rem; }
+  button { font:inherit; padding:.6rem 1rem; border-radius:999px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:700; }
+  code { background:#fff; padding:.15rem .45rem; border-radius:5px; border:1px solid var(--line); }
+  .muted { color:#7a6a4f; font-size:.9rem; }
+  ul { text-align:left; display:inline-block; margin:.8rem 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🐍 beige-cobras-scream</h1>
+  <p class="muted">Project is alive and running. Served from <code>server.js</code>.</p>
+
+  <div class="row">
+    <button class="primary" id="subscribe">Go premium — $2.99/mo</button>
+    <button id="status">Premium status</button>
+  </div>
+  <ul id="features" class="muted"></ul>
+  <p class="muted" id="msg"></p>
+</main>
+<script>
+  const api = (p) => 'api/' + p;
+  async function status() {
+    const j = await fetch(api('premium/status')).then(r => r.json());
+    document.getElementById('msg').textContent = `${j.tier} · ${j.message}`;
+    document.getElementById('features').innerHTML = (j.features || []).map(f => `<li>${f}</li>`).join('');
+  }
+  document.getElementById('status').onclick = status;
+  document.getElementById('subscribe').onclick = async () => {
+    const j = await fetch(api('premium/subscribe'), { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' }).then(r => r.json());
+    document.getElementById('msg').textContent = j.message;
+    status();
+  };
+  status();
+</script>
+</body>
+</html>

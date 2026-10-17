@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>automaton-conway — Game of Life</title>
+<style>
+  :root { --bg:#0c0e12; --panel:#141821; --ink:#e6ebf2; --mut:#7d8a99; --line:#232c38; --acc:#4fc3f7; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,sans-serif; }
+  header { padding:.9rem 1.4rem; border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:.6rem; flex-wrap:wrap; }
+  header h1 { margin:0; font-size:1.15rem; letter-spacing:.4px; }
+  header h1 b { color:var(--acc); }
+  header .sub { color:var(--mut); font-size:.8rem; }
+  main { max-width:900px; margin:1rem auto; padding:0 1rem; display:grid; gap:.9rem; }
+  .bar { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; }
+  button { background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:.45rem .85rem; cursor:pointer; font-size:.9rem; }
+  button:hover { border-color:var(--acc); }
+  button.primary { background:var(--acc); color:#04222f; font-weight:700; border-color:var(--acc); }
+  button.on { border-color:var(--acc); color:var(--acc); }
+  select { background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:.45rem; font-size:.9rem; }
+  .stat { margin-left:auto; color:var(--mut); font-size:.85rem; }
+  canvas { width:100%; background:var(--panel); border:1px solid var(--line); border-radius:12px; touch-action:none; cursor:crosshair; }
+  .hint { color:var(--mut); font-size:.8rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>automaton-<b>conway</b></h1>
+  <span class="sub">Conway's Game of Life · zero dependencies</span>
+</header>
+<main>
+  <div class="bar">
+    <button id="play" class="primary">▶ Start</button>
+    <button id="step">Step</button>
+    <button id="clear">Clear</button>
+    <select id="preset">
+      <option value="">Presets…</option>
+      <option value="glider">Glider</option>
+      <option value="gun">Gosper glider gun</option>
+      <option value="pulsar">Pulsar</option>
+      <option value="rpent">R-pentomino</option>
+      <option value="random">Random soup</option>
+    </select>
+    <select id="speed">
+      <option value="400">Slow</option>
+      <option value="160" selected>Normal</option>
+      <option value="60">Fast</option>
+      <option value="25">Ludicrous</option>
+    </select>
+    <span class="stat">gen <span id="gen">0</span> · alive <span id="alive">0</span></span>
+  </div>
+  <canvas id="board" width="880" height="560"></canvas>
+  <div class="hint">Draw with the mouse (or finger) to add cells · right-drag / two-finger to erase · wrap-around edges</div>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const cv = $('#board'), ctx = cv.getContext('2d');
+
+const COLS = 110, ROWS = 70;
+const CELL = Math.min(cv.width / COLS, cv.height / ROWS);
+const OX = (cv.width - CELL * COLS) / 2, OY = (cv.height - CELL * ROWS) / 2;
+
+let grid = new Uint8Array(COLS * ROWS);
+let age  = new Uint16Array(COLS * ROWS);
+let gen = 0, running = false, timer = null;
+
+const idx = (x, y) => ((y + ROWS) % ROWS) * COLS + ((x + COLS) % COLS);
+const alive = (x, y) => grid[idx(x, y)];
+
+function neighbors(x, y) {
+  return alive(x-1,y-1) + alive(x,y-1) + alive(x+1,y-1) + alive(x-1,y)
+       + alive(x+1,y) + alive(x-1,y+1) + alive(x,y+1) + alive(x+1,y+1);
+}
+
+function step() {
+  const next = new Uint8Array(grid);
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const n = neighbors(x, y), i = idx(x, y);
+    if (grid[i]) { if (n < 2 || n > 3) next[i] = 0; else age[i] = Math.min(age[i] + 1, 65535); }
+    else if (n === 3) { next[i] = 1; age[i] = 0; }
+  }
+  grid = next; gen++;
+  draw();
+}
+
+function draw() {
+  ctx.fillStyle = '#141821';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  let count = 0;
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const i = idx(x, y);
+    if (!grid[i]) continue;
+    count++;
+    const a = Math.min(age[i], 60);
+    // newborn = bright cyan, elders cool to deep blue-violet
+    ctx.fillStyle = `hsl(${190 + a * 2}, ${85 - a}%, ${65 - a * 0.45}%)`;
+    ctx.fillRect(OX + x * CELL + .5, OY + y * CELL + .5, CELL - 1, CELL - 1);
+  }
+  $('#gen').textContent = gen;
+  $('#alive').textContent = count;
+}
+
+function toCell(e) {
+  const r = cv.getBoundingClientRect();
+  const px = (e.clientX - r.left) * (cv.width / r.width);
+  const py = (e.clientY - r.top) * (cv.height / r.height);
+  return [Math.floor((px - OX) / CELL), Math.floor((py - OY) / CELL)];
+}
+
+let painting = 0; // 1 = draw, 2 = erase
+function paint(e, single) {
+  const [cx, cy] = toCell(e);
+  if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS) return;
+  grid[idx(cx, cy)] = painting === 1 ? 1 : 0;
+  if (!grid[idx(cx, cy)]) age[idx(cx, cy)] = 0;
+  if (single) draw();
+}
+
+cv.addEventListener('pointerdown', (e) => {
+  painting = (e.button === 2 || e.buttons === 2) ? 2 : 1;
+  paint(e, true);
+});
+cv.addEventListener('pointermove', (e) => { if (painting) paint(e); });
+window.addEventListener('pointerup', () => painting = 0);
+cv.addEventListener('contextmenu', (e) => e.preventDefault());
+
+function setRunning(on) {
+  running = on;
+  $('#play').textContent = on ? '⏸ Pause' : '▶ Start';
+  clearInterval(timer);
+  if (on) timer = setInterval(step, Number($('#speed').value));
+}
+
+$('#play').addEventListener('click', () => setRunning(!running));
+$('#step').addEventListener('click', () => { if (!running) step(); });
+$('#clear').addEventListener('click', () => { setRunning(false); grid = new Uint8Array(COLS * ROWS); age = new Uint16Array(COLS * ROWS); gen = 0; draw(); });
+$('#speed').addEventListener('change', () => { if (running) setRunning(true); });
+
+const PRESETS = {
+  glider: [[1,0],[2,1],[0,2],[1,2],[2,2]],
+  rpent:  [[1,0],[2,0],[0,1],[1,1],[1,2]],
+  gun:    [[24,0],[22,1],[24,1],[12,2],[13,2],[20,2],[21,2],[34,2],[35,2],[11,3],[15,3],[20,3],[21,3],[34,3],[35,3],[0,4],[1,4],[10,4],[16,4],[20,4],[21,4],[0,5],[1,5],[10,5],[14,5],[16,5],[17,5],[22,5],[24,5],[10,6],[16,6],[24,6],[11,7],[15,7],[12,8],[13,8]],
+  pulsar: (function () {
+    const pts = [];
+    const q = [[2,0],[3,0],[4,0],[0,2],[0,3],[0,4],[5,2],[5,3],[5,4],[2,5],[3,5],[4,5]];
+    for (const [x, y] of q) for (const [sx, sy] of [[1,1],[-1,1],[1,-1],[-1,-1]]) pts.push([30 + sx*x, 30 + sy*y]);
+    return pts;
+  })(),
+  random: (function () {
+    const pts = [];
+    for (let x = 10; x < 100; x++) for (let y = 8; y < 62; y++) if (Math.random() < 0.28) pts.push([x, y]);
+    return pts;
+  })(),
+};
+
+$('#preset').addEventListener('change', () => {
+  const pts = PRESETS[$('#preset').value];
+  if (!pts) return;
+  setRunning(false);
+  grid = new Uint8Array(COLS * ROWS); age = new Uint16Array(COLS * ROWS); gen = 0;
+  for (const [x, y] of pts) { grid[idx(x, y)] = 1; }
+  draw();
+  setRunning(true);
+});
+
+draw();
+</script>
+</body>
+</html>

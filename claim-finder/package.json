@@ -1,0 +1,14 @@
+{
+  "name": "claim-finder",
+  "version": "0.1.0",
+  "description": "claim-finder — official unclaimed-money directory for all 50 states + DC, government surplus auction sources, and a claim tracker. Zero dependencies.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

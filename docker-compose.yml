@@ -1,0 +1,33 @@
+# Run the whole fleet with:  docker compose up --build
+# Then open http://localhost:4000/  (the hub index lists every app).
+services:
+  fleet:
+    build: .
+    image: nicheworks-fleet:latest
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: "4000"
+      # --- optional integrations (uncomment and fill in) ---
+      # Real Stripe checkout across the paid apps:
+      # STRIPE_PUBLIC_KEY: "pk_live_xxx"
+      # A local model backend for the Saluki desk (Ollama):
+      # MODEL_BACKEND_URL: "http://ollama:11434"
+      # eSIM affiliate template (with {q} placeholder) + provider key:
+      # ESIM_AFFILIATE_TEMPLATE: "https://www.bnesim.com/?aff=you&q={q}"
+      # ESIM_PROVIDER_KEY: ""
+    volumes:
+      # Persist each app's SQLite data + Vault blobs across restarts. The
+      # entrypoint links /app/<app>/data into this one mount — apps write to
+      # their own directory, so mounting this path alone is not enough.
+      - fleet-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  fleet-data:

@@ -1,0 +1,29 @@
+# Render Blueprint — the whole fleet as ONE free web service.
+#
+# fuse-hub runs as the start command; it spawns all sibling apps as children
+# and reverse-proxies to them, so a single port serves all twenty-three apps.
+#
+# Deploy: Render Dashboard → New + → Blueprint → pick this repo → Apply.
+# Repo: github.com/casperinc6-source/fuse-hub
+#
+# HONEST LIMITS OF THE FREE TIER (documented, not hidden):
+#   - Sleeps after 15 min with no inbound traffic; ~50s cold start on wake.
+#     The GitHub Actions keepalive in this repo pings /healthz every 10 min
+#     to prevent that (set the RENDER_URL secret after first deploy).
+#   - Filesystem is EPHEMERAL: SQLite data (claims tracker, paperclip saves,
+#     growth entries) resets on every redeploy/restart. Fine for demos;
+#     real persistence needs a paid disk or an external DB later.
+#   - Free instances restart occasionally; the hub auto-restarts all children.
+
+services:
+  - type: web
+    name: fuse-hub
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: "true"          # zero dependencies — nothing to install
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"

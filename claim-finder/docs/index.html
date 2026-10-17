@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Free directory of every U.S. state's official unclaimed-property program (all 50 states + DC) plus government surplus auctions. Track your claims. No fees, ever. Official sources only.">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://casperinc6-source.github.io/claim-finder/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="ClaimFinder — official unclaimed money & surplus auctions">
+<meta property="og:description" content="Find money your state is holding for you. Official programs only, always free — plus a simple claim tracker.">
+<meta property="og:url" content="https://casperinc6-source.github.io/claim-finder/">
+<title>ClaimFinder — official unclaimed money & surplus auctions</title>
+<style>
+  :root {
+    --navy: #080B16; --cyan: #4FD8FF; --ice: #E8F4FF;
+    --slate: #253549; --ink: #04070D; --dim: #8FA3B8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--navy); color: var(--ice); font-family: 'SF Pro Text', -apple-system, 'Segoe UI', sans-serif; line-height: 1.5; }
+  .mono { font-family: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace; }
+
+  /* menubar */
+  .menubar {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .7rem 1.4rem;
+    background: rgba(8, 11, 22, .72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(79, 216, 255, .14);
+  }
+  .menubar .brand { font-weight: 700; letter-spacing: .12em; }
+  .menubar .brand b { color: var(--cyan); }
+  .menubar .right { display: flex; gap: 1rem; align-items: center; font-size: .8rem; color: var(--dim); }
+  .dot { color: #4ade80; animation: pulse 2.2s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+
+  /* layout */
+  section { max-width: 1060px; margin: 0 auto; padding: 4rem 1.4rem 0; }
+  h1 { font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.08; letter-spacing: -.02em; max-width: 18ch; }
+  h1 b { color: var(--cyan); }
+  .sub { color: var(--dim); max-width: 60ch; margin-top: 1rem; }
+  h2 { font-size: 1.5rem; margin-bottom: .4rem; }
+  h2 .tag { font-size: .72rem; letter-spacing: .18em; color: var(--cyan); display: block; margin-bottom: .35rem; }
+
+  .statbar {
+    display: flex; gap: .8rem; flex-wrap: wrap; margin-top: 2rem;
+  }
+  .statbar .cell {
+    border: 1px solid var(--slate); border-radius: 12px; padding: .8rem 1.1rem; min-width: 140px;
+  }
+  .statbar .num { font-size: 1.4rem; font-weight: 700; color: var(--cyan); }
+  .statbar .lbl { font-size: .74rem; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; }
+
+  /* search */
+  .searchrow { display: flex; gap: .8rem; margin: 1.4rem 0 1.2rem; flex-wrap: wrap; }
+  input[type="search"], input[type="text"], input[type="number"], input[type="url"], select, textarea {
+    background: var(--ink); color: var(--ice); border: 1px solid var(--slate); border-radius: 10px;
+    padding: .65rem .9rem; font: inherit; outline: none; min-width: 0;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(79, 216, 255, .15); }
+  #q { flex: 1 1 260px; }
+
+  /* state grid */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: .7rem; }
+  .state {
+    display: block; border: 1px solid var(--slate); border-radius: 12px; padding: .8rem .9rem;
+    text-decoration: none; color: var(--ice); transition: border-color .15s, transform .15s, box-shadow .15s;
+  }
+  .state:hover { border-color: var(--cyan); transform: translateY(-2px); box-shadow: 0 6px 18px rgba(79, 216, 255, .12); }
+  .state .code { font-size: .7rem; color: var(--dim); letter-spacing: .14em; }
+  .state .name { font-weight: 600; font-size: .95rem; }
+  .state .go { color: var(--cyan); font-size: .78rem; }
+  .mm { margin-top: 1.2rem; font-size: .9rem; color: var(--dim); }
+  .mm a, .auction a { color: var(--cyan); }
+
+  /* auctions */
+  .auctions { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: .9rem; }
+  .auction { border: 1px solid var(--slate); border-radius: 14px; padding: 1.1rem 1.2rem; }
+  .auction h3 { font-size: 1.02rem; margin-bottom: .3rem; }
+  .auction p { color: var(--dim); font-size: .88rem; margin: .4rem 0 .7rem; }
+
+  /* tracker */
+  .tform { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .7rem; margin: 1.2rem 0; }
+  .tform .full { grid-column: 1 / -1; }
+  .tform label { display: flex; flex-direction: column; gap: .3rem; font-size: .78rem; color: var(--dim); letter-spacing: .06em; text-transform: uppercase; }
+  .csvbar { display: flex; gap: .6rem; align-items: center; margin: -.3rem 0 1rem; flex-wrap: wrap; }
+  .csvbar .hint { color: var(--dim); font-size: .75rem; }
+  .btn-sm { background: transparent; border: 1px solid var(--slate); color: var(--ice); border-radius: 999px; padding: .4rem 1rem; cursor: pointer; font: inherit; font-size: .8rem; text-decoration: none; }
+  .btn-sm:hover { border-color: var(--cyan); color: var(--cyan); }
+  button.cta {
+    border: 0; border-radius: 999px; padding: .7rem 1.6rem; font-weight: 700; cursor: pointer;
+    background: var(--cyan); color: var(--ink); box-shadow: 0 0 18px rgba(79, 216, 255, .35);
+  }
+  button.cta:hover { filter: brightness(1.08); }
+  .ghost { background: transparent; border: 1px solid var(--slate); color: var(--ice); box-shadow: none; border-radius: 999px; padding: .55rem 1.1rem; cursor: pointer; }
+  .ghost:hover { border-color: var(--cyan); color: var(--cyan); }
+
+  table { width: 100%; border-collapse: collapse; margin-top: .6rem; font-size: .9rem; }
+  th, td { text-align: left; padding: .6rem .5rem; border-bottom: 1px solid var(--slate); vertical-align: top; }
+  th { color: var(--dim); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; }
+  td select { padding: .3rem .5rem; font-size: .82rem; }
+  td .del { color: var(--dim); background: none; border: 0; cursor: pointer; font-size: 1rem; }
+  td .del:hover { color: #f87171; }
+  td a { color: var(--cyan); text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+  .empty { color: var(--dim); padding: 1.2rem 0; }
+  .status-paid { color: #4ade80; } .status-waiting { color: #fbbf24; }
+  .status-filed { color: var(--cyan); } .status-closed { color: var(--dim); }
+
+  footer { max-width: 1060px; margin: 4rem auto 0; padding: 2rem 1.4rem 3rem; border-top: 1px solid var(--slate); color: var(--dim); font-size: .8rem; }
+  footer b { color: var(--ice); }
+  @media (max-width: 560px) { section { padding-top: 3rem; } }
+</style>
+</head>
+<body>
+
+<header class="menubar mono">
+  <div class="brand">CLAIM<b>FINDER</b></div>
+  <div class="right"><span class="dot">●</span> LIVE <span id="clock">--:--</span></div>
+</header>
+
+<section id="top">
+  <h1>Money and property <b>already owed to people.</b> Official sources only.</h1>
+  <p class="sub">A directory of every U.S. state's <b>official</b> unclaimed-property program, plus the government auction sites that legitimately sell abandoned cars, surplus gear, and seized real estate. Claiming through state programs is always <b>free</b> — this app never charges, never takes a cut, and never asks for personal data.</p>
+
+  <div class="statbar mono">
+    <div class="cell"><div class="num" id="st-states">51</div><div class="lbl">official state programs</div></div>
+    <div class="cell"><div class="num" id="st-auctions">6</div><div class="lbl">auction sources</div></div>
+    <div class="cell"><div class="num">$0</div><div class="lbl">fees. ever.</div></div>
+    <div class="cell"><div class="num" id="st-tracked">0</div><div class="lbl">claims tracked</div></div>
+    <div class="cell"><div class="num" id="st-value">$0</div><div class="lbl">tracked value</div></div>
+  </div>
+
+  <div class="legit">
+    <b>The honest version of "free money":</b> states hold billions in dormant bank accounts, uncashed paychecks, and old deposits — and by law must return them, free, to whoever proves ownership. There is no trick, no bot, and no paid service needed. Beware anyone charging you a % to do what your state does free; a handful of states allow small finder commissions, but you can always file yourself for nothing.
+  </div>
+</section>
+
+<section id="states">
+  <h2><span class="tag mono">01 / DIRECTORY</span>Unclaimed money — all 50 states + DC</h2>
+  <p class="sub">Each card links straight to the official state program. Check every state you've lived or done business in — property is held where the company was, not where you are.</p>
+  <div class="searchrow">
+    <input id="q" type="search" placeholder="Search a state… e.g. Texas, CA, York" autocomplete="off">
+    <a class="ghost mono" style="text-decoration:none;line-height:1.4" href="https://www.missingmoney.com/" target="_blank" rel="noopener">Multi-state search ↗</a>
+  </div>
+  <div class="grid" id="grid"></div>
+  <p class="mm">Link broken? The <a href="https://unclaimed.org/search/" target="_blank" rel="noopener">NAUPA master finder</a> routes to every official program.</p>
+</section>
+
+<section id="auctions">
+  <h2><span class="tag mono">02 / AUCTIONS</span>Abandoned cars, surplus & seized property — the legal way</h2>
+  <p class="sub">You can't just claim an abandoned car or house — cities tow and auction them, and courts sell seized property. That's the legitimate door in: bid at official government auctions, often far below market.</p>
+  <div class="auctions" id="auction-grid"></div>
+</section>
+
+<section id="tracker">
+  <h2><span class="tag mono">03 / TRACKER</span>Your claim pipeline</h2>
+  <p class="sub">Found a match? Track it here — statuses move from researching → filed → waiting → paid. Stored locally in SQLite on this machine, nothing leaves it.</p>
+
+  <form class="tform" id="tform">
+    <label>Item / who it's for
+      <input type="text" id="f-item" placeholder="Grandma's CA bank account" required minlength="2">
+    </label>
+    <label>State
+      <input type="text" id="f-state" placeholder="CA" maxlength="40">
+    </label>
+    <label>Program URL
+      <input type="url" id="f-url" placeholder="https://ucpi.sco.ca.gov/" required>
+    </label>
+    <label>Est. value ($)
+      <input type="number" id="f-value" placeholder="250" min="0" step="0.01">
+    </label>
+    <label>Notes <span style="text-transform:none;letter-spacing:0">(optional)</span>
+      <input type="text" id="f-notes" placeholder="Filed 3/12, need death certificate">
+    </label>
+    <div class="full" style="display:flex;justify-content:flex-end">
+      <button class="cta" type="submit">Add claim</button>
+    </div>
+  </form>
+
+  <div class="csvbar">
+    <button class="btn-sm" id="csv-export" type="button">⬇ Export CSV</button>
+    <label class="btn-sm" for="csv-import-file" style="cursor:pointer">⬆ Import CSV</label>
+    <input type="file" id="csv-import-file" accept=".csv,text/csv" hidden>
+    <span class="hint">columns: item, state, url, value_usd, status, notes</span>
+  </div>
+
+  <table>
+    <thead><tr><th>Item</th><th>State</th><th>Link</th><th>Value</th><th>Status</th><th></th></tr></thead>
+    <tbody id="tbody"><tr><td colspan="6" class="empty">No claims tracked yet — add one above.</td></tr></tbody>
+  </table>
+</section>
+
+<section id="help">
+  <h2><span class="tag mono">04 / NEED A HAND?</span>Rather not do the digging yourself?</h2>
+  <p class="sub">ClaimFinder is free and always will be — no fees, no cut, no catch. But if you'd like help recovering a claim, or you need a website built or fixed, that's the work I do for a living.</p>
+  <p style="margin-top:1rem"><a class="ghost mono" style="display:inline-block;text-decoration:none;line-height:1.4" href="https://casperinc6-source.github.io/hire-me/" target="_blank" rel="noopener">See what I build &amp; fix ↗</a></p>
+</section>
+
+<footer>
+  <p><b>ClaimFinder</b> is a free, open-source directory. It stores only what you type into the tracker, on your own machine. It is not affiliated with any government agency. Verify everything on the official pages linked above.</p>
+</footer>
+
+<script>
+'use strict';
+
+// App mode: 'node' (SQLite API) or 'static' (GitHub Pages + localStorage).
+// Detection is lazy: the first successful /api/* call flips it to 'node';
+// the first failure flips it to 'static' and shows a one-time banner.
+let MODE = 'unknown';
+const LS_KEY = 'claimfinder.claims.v1';
+const STATUSES = ['researching', 'filed', 'waiting', 'paid', 'closed'];
+
+const API_BASE = location.pathname.includes('/claims/') ? '/claims' : '';
+const api = (p) => API_BASE + p;
+
+// ---------- static-mode banner (only shown when the Node backend is absent) ----------
+function showStaticNote() {
+  if (document.getElementById('static-note')) return;
+  const el = document.createElement('div');
+  el.className = 'legit';
+  el.id = 'static-note';
+  el.style.marginTop = '1rem';
+  el.innerHTML = '<b>Static mode.</b> The SQLite backend isn\u2019t running, so tracker claims are saved in this browser (localStorage) instead. The directory above works exactly the same either way.';
+  const statbar = document.querySelector('.statbar');
+  (statbar && statbar.parentNode ? statbar.parentNode : document.body).insertBefore(el, statbar ? statbar.nextSibling : null);
+}
+
+// ---------- clock ----------
+const clockEl = document.getElementById('clock');
+const tick = () => { clockEl.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); };
+tick(); setInterval(tick, 15000);
+
+// ---------- state directory ----------
+let STATES = [];
+const grid = document.getElementById('grid');
+const q = document.getElementById('q');
+
+function renderStates() {
+  const needle = q.value.trim().toLowerCase();
+  const rows = STATES.filter(([code, name]) =>
+    !needle || name.toLowerCase().includes(needle) || code.toLowerCase().includes(needle));
+  grid.innerHTML = rows.map(([code, name, url]) =>
+    `<a class="state" href="${url}" target="_blank" rel="noopener">
+       <div class="code mono">${code}</div>
+       <div class="name">${name}</div>
+       <div class="go">official program ↗</div>
+     </a>`).join('') || '<p class="empty">No state matches — try the multi-state search.</p>';
+}
+q.addEventListener('input', renderStates);
+
+// ---------- auctions ----------
+const AUCTIONS = [
+  ['GovDeals', 'https://www.govdeals.com/en/automobiles-cars', 'The big municipal marketplace: city and county surplus, abandoned/impounded vehicles, heavy equipment. Most US cities sell here. (May block scripted checks — fine in a browser.)'],
+  ['GSA Auctions', 'https://gsaauctions.gov/', 'Federal fleet + seized property: cars, trucks, boats, aircraft, real estate.'],
+  ['USA.gov vehicle hub', 'https://www.usa.gov/car-auctions', "The government's own index of vehicle auction sources — start here to find your state's program."],
+  ['USA.gov money hub', 'https://www.usa.gov/unclaimed-money', 'Official federal index of money owed to you: pensions, tax refunds, bank failures, insurance.'],
+  ['State consumer offices', 'https://www.usa.gov/state-consumer', 'Every state consumer office links to local impound/surplus sales. Scroll to your state.'],
+  ['Federal real estate', 'https://realestatesales.gov/', 'Official portal for surplus and seized federal real estate — houses and land, sold at auction.'],
+];
+document.getElementById('auction-grid').innerHTML = AUCTIONS.map(([name, url, desc]) =>
+  `<div class="auction">
+     <h3><a href="${url}" target="_blank" rel="noopener">${name} ↗</a></h3>
+     <p>${desc}</p>
+   </div>`).join('');
+
+// ---------- tracker ----------
+const tbody = document.getElementById('tbody');
+const tform = document.getElementById('tform');
+const money = (c) => (c / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+
+const claimsStore = {
+  async list() {
+    try {
+      const claims = await fetch(api('/api/claims')).then((r) => { if (!r.ok) throw 0; return r.json(); });
+      if (MODE === 'unknown') MODE = 'node';
+      return claims;
+    } catch {
+      if (MODE === 'unknown') { MODE = 'static'; showStaticNote(); }
+      try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch { return []; }
+    }
+  },
+  async save(claims) {
+    if (MODE === 'node') return;
+    try { localStorage.setItem(LS_KEY, JSON.stringify(claims)); } catch {}
+  },
+  async add(c) {
+    if (MODE === 'node') {
+      const res = await fetch(api('/api/claims'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(c), // dollars; server converts to cents
+      });
+      if (!res.ok) throw new Error((await res.json()).error || ('HTTP ' + res.status));
+      return;
+    }
+    const claims = await this.list();
+    const id = claims.reduce((m, x) => Math.max(m, x.id || 0), 0) + 1;
+    claims.push({ item: c.item, state: c.state, url: c.url, value_cents: Math.round((Number(c.value) || 0) * 100), notes: c.notes, id, status: STATUSES.includes(c.status) ? c.status : 'researching', created_at: new Date().toISOString() });
+    await this.save(claims);
+  },
+  async setStatus(id, status) {
+    if (MODE === 'node') {
+      const res = await fetch(api('/api/claims/' + id), {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return;
+    }
+    const claims = await this.list();
+    const row = claims.find((x) => x.id === id);
+    if (row) { row.status = status; row.updated_at = new Date().toISOString(); await this.save(claims); }
+  },
+  async remove(id) {
+    if (MODE === 'node') {
+      await fetch(api('/api/claims/' + id), { method: 'DELETE' });
+      return;
+    }
+    await this.save((await this.list()).filter((x) => x.id !== id));
+  },
+};
+
+async function loadClaims() {
+  const claims = await claimsStore.list();
+  const total = claims.reduce((s, c) => s + (c.value_cents || 0), 0);
+  tbody.innerHTML = claims.length ? claims.map((c) => `
+      <tr>
+        <td><b>${esc(c.item)}</b>${c.notes ? `<div style="color:var(--dim);font-size:.8rem">${esc(c.notes)}</div>` : ''}</td>
+        <td class="mono">${esc(c.state || '—')}</td>
+        <td><a href="${esc(c.url)}" target="_blank" rel="noopener">open ↗</a></td>
+        <td class="mono">${money(c.value_cents)}</td>
+        <td><select data-id="${c.id}" class="status status-${c.status}">
+              ${['researching', 'filed', 'waiting', 'paid', 'closed'].map((s) =>
+                `<option value="${s}"${s === c.status ? ' selected' : ''}>${s}</option>`).join('')}
+            </select></td>
+        <td><button class="del" data-id="${c.id}" title="delete">✕</button></td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" class="empty">No claims tracked yet — add one above.</td></tr>';
+  document.getElementById('st-tracked').textContent = claims.length;
+  document.getElementById('st-value').textContent = money(total);
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+tbody.addEventListener('change', async (e) => {
+  const sel = e.target.closest('select.status');
+  if (!sel) return;
+  try { await claimsStore.setStatus(Number(sel.dataset.id), sel.value); } catch (err) { alert('Save failed: ' + err.message); }
+  loadClaims();
+});
+
+tbody.addEventListener('click', async (e) => {
+  const del = e.target.closest('button.del');
+  if (!del) return;
+  try { await claimsStore.remove(Number(del.dataset.id)); } catch (err) { alert('Delete failed: ' + err.message); }
+  loadClaims();
+});
+
+tform.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const body = {
+    item: document.getElementById('f-item').value,
+    state: document.getElementById('f-state').value,
+    url: document.getElementById('f-url').value,
+    value: Number(document.getElementById('f-value').value || 0), // dollars
+    notes: document.getElementById('f-notes').value,
+  };
+  try { await claimsStore.add(body); tform.reset(); loadClaims(); }
+  catch (err) { alert('Could not save: ' + err.message); }
+});
+
+// ---------- CSV export / import (works in node and static modes) ----------
+const CSV_HEAD = ['item', 'state', 'url', 'value_usd', 'status', 'notes'];
+const csvCell = (v) => {
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+};
+
+document.getElementById('csv-export').addEventListener('click', async () => {
+  const claims = await claimsStore.list();
+  if (!claims.length) { alert('Nothing to export yet — add a claim first.'); return; }
+  const lines = [CSV_HEAD.join(',')];
+  for (const c of claims) {
+    lines.push([c.item, c.state, (c.value_cents || 0) / 100, c.url, c.status, c.notes].map(csvCell).join(','));
+  }
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'claimfinder-claims.csv';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
+
+// RFC-4180-ish CSV parser: quoted cells, escaped quotes, CRLF, ragged rows.
+function parseCsv(text) {
+  const rows = [];
+  let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) {
+      if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
+      else cell += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === ',') { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell); cell = '';
+      if (row.some((x) => x !== '')) rows.push(row);
+      row = [];
+    } else cell += ch;
+  }
+  row.push(cell);
+  if (row.some((x) => x !== '')) rows.push(row);
+  return rows;
+}
+
+document.getElementById('csv-import-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = ''; // allow re-importing the same file
+  if (!file) return;
+  let rows;
+  try { rows = parseCsv(await file.text()); } catch { alert('Could not read that file.'); return; }
+  if (!rows.length) { alert('That CSV is empty.'); return; }
+  const head = rows[0].map((x) => x.trim().toLowerCase());
+  const idx = (name) => head.indexOf(name);
+  const iItem = idx('item'), iState = idx('state'), iUrl = idx('url');
+  const iVal = idx('value_usd'), iStat = idx('status'), iNotes = idx('notes');
+  if (iItem === -1 || iUrl === -1) { alert('CSV needs at least "item" and "url" columns.'); return; }
+  let added = 0, skipped = 0;
+  for (const r of rows.slice(1)) {
+    const item = (r[iItem] || '').trim();
+    const url = (r[iUrl] || '').trim();
+    if (item.length < 2 || !/^https?:\/\//.test(url)) { skipped++; continue; }
+    const rawStatus = iStat === -1 ? '' : (r[iStat] || '').trim();
+    const value = Math.max(0, Number((iVal === -1 ? '0' : r[iVal] || '0').replace(/[$,]/g, '')) || 0);
+    try {
+      await claimsStore.add({
+        item,
+        state: iState === -1 ? '' : (r[iState] || '').trim(),
+        url,
+        value,
+        notes: iNotes === -1 ? '' : (r[iNotes] || '').trim(),
+        status: rawStatus,
+      });
+      added++;
+    } catch { skipped++; }
+  }
+  loadClaims();
+  alert(`Imported ${added} claim${added === 1 ? '' : 's'}` +
+    (skipped ? ` — skipped ${skipped} row${skipped === 1 ? '' : 's'} (bad item/url or rejected).` : '.'));
+});
+
+// ---------- boot ----------
+(async () => {
+  try {
+    const data = await fetch(api('/api/states')).then((r) => { if (!r.ok) throw 0; return r.json(); });
+    if (MODE === 'unknown') MODE = 'node';
+    STATES = data.states.map((s) => [s.code, s.name, s.url]);
+    document.getElementById('st-states').textContent = data.count;
+    document.getElementById('st-auctions').textContent = data.auctions.length;
+  } catch {
+    if (MODE === 'unknown') { MODE = 'static'; showStaticNote(); }
+    const data = await fetch('states.json').then((r) => r.json());
+    STATES = data.states;
+    document.getElementById('st-states').textContent = data.states.length;
+    document.getElementById('st-auctions').textContent = data.auctions.length;
+  }
+  renderStates();
+})();
+loadClaims();
+</script>
+</body>
+</html>

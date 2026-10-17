@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>survivalbots — evolvable automaton ecology</title>
+<style>
+  :root { --bg:#0b0d10; --panel:#151a20; --ink:#e6ebf2; --mut:#7d8a99; --line:#232c38; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,sans-serif; }
+  header { padding:.9rem 1.4rem; border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:.8rem; flex-wrap:wrap; }
+  header h1 { margin:0; font-size:1.15rem; }
+  header h1 b { color:#ffd166; }
+  header .sub { color:var(--mut); font-size:.8rem; }
+  main { max-width:1040px; margin:1rem auto; padding:0 1rem; display:grid; gap:.9rem; }
+  .bar { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; }
+  button { background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:.45rem .85rem; cursor:pointer; font-size:.9rem; }
+  button.primary { background:#ffd166; color:#2b1d00; font-weight:700; border-color:#ffd166; }
+  .stat { margin-left:auto; color:var(--mut); font-size:.85rem; display:flex; gap:1rem; flex-wrap:wrap; }
+  .stat b { font-variant-numeric:tabular-nums; }
+  .r { color:#ff6b6b; } .g { color:#51cf66; } .b { color:#4dabf7; }
+  canvas { width:100%; background:var(--panel); border:1px solid var(--line); border-radius:12px; display:block; }
+  .row2 { display:grid; grid-template-columns:1fr 340px; gap:.9rem; }
+  @media (max-width:900px){ .row2 { grid-template-columns:1fr; } }
+  .legend { display:flex; gap:1.2rem; color:var(--mut); font-size:.8rem; flex-wrap:wrap; }
+  .dot { display:inline-block; width:.7em; height:.7em; border-radius:50%; margin-right:.35em; }
+  .gene-ctl { display:flex; align-items:center; gap:.6rem; color:var(--mut); font-size:.8rem; }
+  input[type=range] { accent-color:#ffd166; }
+  table { width:100%; border-collapse:collapse; font-size:.82rem; }
+  th,td { padding:.35rem .5rem; text-align:left; border-bottom:1px solid var(--line); }
+  th { color:var(--mut); font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; }
+  td b { font-variant-numeric:tabular-nums; }
+  .spark-title { color:var(--mut); font-size:.75rem; margin:.2rem 0 .3rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>conway-automoton-<b>survivalbots</b></h1>
+  <div class="sub">evolvable genes · natural selection · zero dependencies</div>
+</header>
+<main>
+  <div class="bar">
+    <button id="play" class="primary">▶ Evolve</button>
+    <button id="step">Tick</button>
+    <button id="seed">Re-seed world</button>
+    <button id="turbo">⏩ Turbo: OFF</button>
+    <div class="gene-ctl">
+      <label for="mut">mutation</label>
+      <input type="range" id="mut" min="0" max="40" value="12" />
+      <b id="mutv">12%</b>
+    </div>
+    <div class="stat">
+      <span class="r">red <b id="nR">0</b></span>
+      <span class="g">green <b id="nG">0</b></span>
+      <span class="b">blue <b id="nB">0</b></span>
+      <span>food <b id="nF">0</b></span>
+      <span>tick <b id="tick">0</b></span>
+      <span>gen <b id="gen">0</b></span>
+    </div>
+  </div>
+
+  <div class="row2">
+    <canvas id="world" width="660" height="500"></canvas>
+    <div>
+      <div class="spark-title">GENE POOL — species averages over time (0–10 scale)</div>
+      <canvas id="genes" width="640" height="200"></canvas>
+      <div class="spark-title">POPULATION — bots by species &amp; food supply over time</div>
+      <canvas id="pops" width="640" height="160"></canvas>
+      <table id="geneTable">
+        <thead><tr><th>species</th><th>n</th><th>speed</th><th>sense</th><th>appetite</th><th>fear</th><th>best gen</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="legend" style="margin-top:.6rem">
+        <span><span class="dot" style="background:#ff6b6b"></span>hunter</span>
+        <span><span class="dot" style="background:#51cf66"></span>forager</span>
+        <span><span class="dot" style="background:#4dabf7"></span>drone</span>
+        <span><span class="dot" style="background:#f3f0d7"></span>food</span>
+      </div>
+      <p style="color:var(--mut);font-size:.75rem;line-height:1.5;margin:.6rem 0 0">
+        Genes 0–10: <b style="color:var(--ink)">speed</b> burns energy quadratically,
+        <b style="color:var(--ink)">sense</b> costs a little per tick,
+        <b style="color:var(--ink)">appetite</b> raises both food value and energy cap,
+        <b style="color:var(--ink)">fear</b> widens threat detection — fleeing costs energy, getting eaten costs everything.
+        Children inherit genes ± mutation; the environment does the selecting.
+      </p>
+    </div>
+  </div>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const cv = $('#world'), ctx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+const CELL = 8, COLS = Math.floor(W / CELL), ROWS = Math.floor(H / CELL);
+const rnd = (n) => Math.floor(Math.random() * n);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+let bots = [], food = [], tick = 0, genMax = 0, timer = null, running = false;
+const OCC = new Map();
+
+const KINDS = {
+  R: { color: '#ff6b6b', base: 55 },
+  G: { color: '#51cf66', base: 50 },
+  B: { color: '#4dabf7', base: 45 },
+};
+
+// ---- genes -----------------------------------------------------------------
+// g.speed: 0-10  -> step size; energy cost ~ 0.35 + 0.02*s^2 per move
+// g.sense : 0-10 -> vision radius in cells; cost 0.03*s per tick
+// g.app   : 0-10 -> food/energy value multiplier (1 + 0.12*a) and cap 90+6*a
+// g.fear  : 0-10 -> threat-detection radius; fleeing costs 0.4, vigilance 0.02/tick
+function makeBot(kind, x, y, genes, gen, energy) {
+  return {
+    kind, x, y, gen: gen || 0,
+    g: genes ? { ...genes } : { speed: 2 + Math.random() * 3, sense: 3 + Math.random() * 3, app: 3 + Math.random() * 3, fear: 2 + Math.random() * 3 },
+    e: energy ?? KINDS[kind].base, age: 0, dir: rnd(8),
+  };
+}
+
+function cap(b)   { return 90 + 6 * b.g.app; }
+function moveCost(b) { return 0.35 + 0.02 * b.g.speed * b.g.speed; }
+function senseCost(b) { return 0.03 * b.g.sense; }
+
+function mutate(g, rate) {
+  const m = (v) => clamp(v + (Math.random() * 2 - 1) * rate * 0.10, 0.5, 10);
+  return { speed: m(g.speed), sense: m(g.sense), app: m(g.app), fear: m(g.fear) };
+}
+
+function seed() {
+  bots = []; food = []; tick = 0; genMax = 0; geneHist.length = 0; popHist.length = 0;
+  for (let i = 0; i < 14; i++) bots.push(makeBot('R', rnd(COLS), rnd(ROWS)));
+  for (let i = 0; i < 22; i++) bots.push(makeBot('G', rnd(COLS), rnd(ROWS)));
+  for (let i = 0; i < 22; i++) bots.push(makeBot('B', rnd(COLS), rnd(ROWS)));
+  for (let i = 0; i < 90; i++) food.push({ x: COLS/2 + rnd(41)-20, y: ROWS/2 + rnd(23)-11 });
+}
+
+const DIRS = [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+const d2 = (ax, ay, bx, by) => (ax-bx)*(ax-bx) + (ay-by)*(ay-by);
+const remove = (arr, t) => { const i = arr.indexOf(t); if (i !== -1) arr.splice(i, 1); };
+
+function findTarget(b, radius, pool, filter) {
+  let best = null, bd = radius * radius;
+  for (const t of pool) {
+    if (t === b) continue;
+    if (filter && !filter(t)) continue;
+    const dd = d2(b.x, b.y, t.x, t.y);
+    if (dd <= bd) { bd = dd; best = t; }
+  }
+  return best;
+}
+
+// ---- one world tick ----------------------------------------------------------
+let lastAlive = 0; // for extinction detection
+function tickWorld() {
+  tick++;
+  // Extinction → new epoch: after 60 empty ticks, reseed automatically.
+  if (bots.length) lastAlive = tick;
+  else if (tick - lastAlive >= 60) { seed(); lastAlive = 0; return; }
+  if (tick % 2 === 0 && food.length < 160) food.push({ x: COLS/2 + rnd(41)-20, y: ROWS/2 + rnd(23)-11 });
+
+  OCC.clear();
+  for (const b of bots) OCC.set(b.x + ',' + b.y, b);
+
+  const born = [];
+  for (const b of bots) {
+    const k = KINDS[b.kind];
+    b.age++;
+    b.e -= 0.55 + senseCost(b) + 0.01 * b.g.fear; // basal + senses + vigilance
+
+    // --- fear: spot threats first; panic overrides hunger ---
+    // hunters avoid crowding other hunters; foragers & drones flee hunters.
+    // Adrenaline: fleeing bots move 1 step faster, so escape is possible —
+    // but fleeing burns energy, so sensitivity is under real selection.
+    let fleeFrom = null;
+    if (b.kind === 'R') fleeFrom = findTarget(b, 1 + b.g.fear * 0.5, bots, (t) => t.kind === 'R');
+    else fleeFrom = findTarget(b, 1 + b.g.fear * 0.8, bots, (t) => t.kind === 'R');
+    if (fleeFrom) b.e -= 0.15; // fleeing burns a little energy
+
+    // --- sense & chase (vision radius from genes) ---
+    let tgt = null;
+    const R = b.g.sense;
+    if (fleeFrom) tgt = { x: b.x - (fleeFrom.x - b.x), y: b.y - (fleeFrom.y - b.y) };
+    else if (b.kind === 'R') tgt = findTarget(b, R, bots, (t) => t.kind !== 'R');
+    else if (b.kind === 'G') tgt = findTarget(b, R, food);
+    if (!tgt && b.kind !== 'B') {
+      if (Math.random() < 0.3) b.dir = rnd(8);
+      tgt = { x: b.x + DIRS[b.dir][0] * 4, y: b.y + DIRS[b.dir][1] * 4 };
+    }
+    if (tgt) {
+      const steps = Math.max(1, Math.round(b.g.speed)) + (fleeFrom ? 1 : 0);
+      for (let s = 0; s < steps; s++) {
+        const dx = Math.sign(tgt.x - b.x), dy = Math.sign(tgt.y - b.y);
+        const nx = clamp(b.x + dx, 0, COLS - 1), ny = clamp(b.y + dy, 0, ROWS - 1);
+        const key = nx + ',' + ny;
+        const other = OCC.get(key);
+        if (other && other !== b) {
+          if (b.kind === 'R') {
+            b.e = Math.min(b.e + other.e * 0.6 + 20, cap(b));
+            remove(bots, other); OCC.delete(key);
+            b.x = nx; b.y = ny; OCC.set(key, b);
+          } else { b.dir = rnd(8); break; }
+        } else {
+          if (other !== b) { OCC.delete(b.x + ',' + b.y); b.x = nx; b.y = ny; OCC.set(key, b); }
+          b.e -= moveCost(b);
+        }
+      }
+    }
+
+    // --- eat (appetite raises the value of every meal) ---
+    if (b.kind === 'G') {
+      for (let i = food.length - 1; i >= 0; i--) {
+        if (food[i].x === b.x && food[i].y === b.y) {
+          food.splice(i, 1);
+          b.e = Math.min(b.e + 22 * (1 + 0.12 * b.g.app), cap(b));
+          break;
+        }
+      }
+    }
+
+    // --- reproduce: pass genes ± mutation ---
+    if (b.e > cap(b) * 0.8 && bots.length + born.length < 220 && Math.random() < 0.06) {
+      b.e -= cap(b) * 0.35;
+      born.push(makeBot(b.kind, b.x, b.y, mutate(b.g, Number($('#mut').value)), b.gen + 1, cap(b) * 0.35));
+      genMax = Math.max(genMax, b.gen + 1);
+    }
+
+    // --- death ---
+    if (b.e <= 0 || (b.kind === 'B' && b.age > 900) || b.age > 2400) {
+      remove(bots, b); OCC.delete(b.x + ',' + b.y);
+    }
+  }
+  bots.push(...born);
+
+  if (tick % 30 === 0) recordGenes();
+  draw(); stats();
+}
+
+// ---- gene pool stats & history ------------------------------------------------
+const geneHist = []; // {tick, R:{avg…}, G:{…}, B:{…}}
+const popHist = [];  // {tick, R, G, B, F} population counts
+function avgGenes(kind) {
+  const list = bots.filter((b) => b.kind === kind);
+  if (!list.length) return null;
+  const avg = (k) => list.reduce((s, b) => s + b.g[k], 0) / list.length;
+  return { n: list.length, speed: avg('speed'), sense: avg('sense'), app: avg('app'), fear: avg('fear') };
+}
+function recordGenes() {
+  const R = avgGenes('R'), G = avgGenes('G'), B = avgGenes('B');
+  geneHist.push({ tick, R, G, B });
+  if (geneHist.length > 240) geneHist.shift();
+  popHist.push({ tick, R: R ? R.n : 0, G: G ? G.n : 0, B: B ? B.n : 0, F: food.length });
+  if (popHist.length > 240) popHist.shift();
+  drawGeneChart(); drawPopChart(); geneTable();
+}
+function geneTable() {
+  const rows = ['R', 'G', 'B'].map((k) => {
+    const a = avgGenes(k);
+    const names = { R: 'hunter', G: 'forager', B: 'drone' };
+    const best = bots.filter((b) => b.kind === k).reduce((m, b) => Math.max(m, b.gen), 0);
+    return a
+      ? `<tr><td class="${k === 'R' ? 'r' : k === 'G' ? 'g' : 'b'}">${names[k]}</td><td><b>${a.n}</b></td>
+         <td><b>${a.speed.toFixed(1)}</b></td><td><b>${a.sense.toFixed(1)}</b></td>
+         <td><b>${a.app.toFixed(1)}</b></td><td><b>${a.fear.toFixed(1)}</b></td><td><b>${best}</b></td></tr>`
+      : `<tr><td class="${k === 'R' ? 'r' : k === 'G' ? 'g' : 'b'}">${names[k]}</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>`;
+  });
+  $('#geneTable tbody').innerHTML = rows.join('');
+}
+
+// ---- drawing -------------------------------------------------------------------
+function draw() {
+  ctx.fillStyle = '#151a20'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#f3f0d7';
+  for (const f of food) ctx.fillRect(f.x * CELL + 2.5, f.y * CELL + 2.5, 3, 3);
+  for (const b of bots) {
+    ctx.fillStyle = KINDS[b.kind].color;
+    // size hints at genetic appetite
+    const size = CELL - 2 + Math.round(b.g.app * 0.2) - 1;
+    ctx.fillRect(b.x * CELL + 1, b.y * CELL + 1, size, size);
+    // halo for high-generation lineages
+    if (b.gen >= 5) {
+      ctx.strokeStyle = 'rgba(255,255,255,.35)';
+      ctx.strokeRect(b.x * CELL + 0.5, b.y * CELL + 0.5, size + 1, size + 1);
+    }
+  }
+}
+
+const gctx = $('#genes').getContext('2d');
+function drawGeneChart() {
+  const gw = $('#genes').width, gh = $('#genes').height;
+  gctx.fillStyle = '#10151b'; gctx.fillRect(0, 0, gw, gh);
+  gctx.strokeStyle = '#232c38'; gctx.lineWidth = 1;
+  for (let i = 1; i < 5; i++) { gctx.beginPath(); gctx.moveTo(0, gh * i / 5); gctx.lineTo(gw, gh * i / 5); gctx.stroke(); }
+  const keys = ['R', 'G', 'B'];
+  for (const k of keys) {
+    gctx.strokeStyle = KINDS[k].color; gctx.lineWidth = 2;
+    for (const gene of ['app', 'fear', 'speed', 'sense']) {
+      gctx.globalAlpha = gene === 'app' ? 1 : gene === 'fear' ? 0.85 : gene === 'speed' ? 0.66 : 0.4;
+      gctx.beginPath();
+      let started = false;
+      geneHist.forEach((h, i) => {
+        const v = h[k]; if (!v) return;
+        const x = gw * i / 240, y = gh - (v[gene] / 10) * (gh - 8) - 4;
+        if (!started) { gctx.moveTo(x, y); started = true; } else gctx.lineTo(x, y);
+      });
+      gctx.stroke();
+    }
+  }
+  gctx.globalAlpha = 1;
+  gctx.fillStyle = '#7d8a99'; gctx.font = '11px system-ui';
+  gctx.fillText('bright = appetite / fear · faded = speed / sense', 10, gh - 8);
+}
+
+const pctx = $('#pops').getContext('2d');
+function drawPopChart() {
+  const gw = $('#pops').width, gh = $('#pops').height;
+  pctx.fillStyle = '#10151b'; pctx.fillRect(0, 0, gw, gh);
+  pctx.strokeStyle = '#232c38'; pctx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) { pctx.beginPath(); pctx.moveTo(0, gh * i / 4); pctx.lineTo(gw, gh * i / 4); pctx.stroke(); }
+  if (!popHist.length) return;
+  const max = Math.max(30, ...popHist.map((p) => Math.max(p.R, p.G, p.B, p.F)));
+  const line = (key, color, dash) => {
+    pctx.strokeStyle = color; pctx.lineWidth = 2; pctx.setLineDash(dash || []);
+    pctx.beginPath();
+    popHist.forEach((p, i) => {
+      const x = gw * i / 240, y = gh - (p[key] / max) * (gh - 14) - 4;
+      if (i === 0) pctx.moveTo(x, y); else pctx.lineTo(x, y);
+    });
+    pctx.stroke(); pctx.setLineDash([]);
+  };
+  line('F', 'rgba(243,240,215,.55)', [4, 4]);   // food supply, dashed
+  line('R', '#ff6b6b');                          // hunters
+  line('G', '#51cf66');                          // foragers
+  line('B', '#4dabf7');                          // drones
+  pctx.fillStyle = '#7d8a99'; pctx.font = '11px system-ui';
+  pctx.fillText('peak ' + max + ' · dashed = food', 8, 14);
+}
+
+function stats() {
+  $('#nR').textContent = bots.filter(b => b.kind === 'R').length;
+  $('#nG').textContent = bots.filter(b => b.kind === 'G').length;
+  $('#nB').textContent = bots.filter(b => b.kind === 'B').length;
+  $('#nF').textContent = food.length;
+  $('#tick').textContent = tick;
+  $('#gen').textContent = genMax;
+}
+
+// ---- controls --------------------------------------------------------------------
+let turbo = false;
+function setRunning(on) {
+  running = on;
+  $('#play').textContent = on ? '⏸ Pause' : '▶ Evolve';
+  clearInterval(timer);
+  if (on) timer = setInterval(tickWorld, turbo ? 12 : 60);
+}
+$('#play').addEventListener('click', () => setRunning(!running));
+$('#turbo').addEventListener('click', () => {
+  turbo = !turbo;
+  $('#turbo').textContent = turbo ? '⏩ Turbo: ON' : '⏩ Turbo: OFF';
+  if (running) setRunning(true);
+});
+$('#step').addEventListener('click', () => { if (!running) tickWorld(); });
+$('#seed').addEventListener('click', () => { seed(); draw(); stats(); drawGeneChart(); geneTable(); });
+$('#mut').addEventListener('input', () => $('#mutv').textContent = $('#mut').value + '%');
+
+seed(); draw(); stats(); recordGenes();
+</script>
+</body>
+</html>

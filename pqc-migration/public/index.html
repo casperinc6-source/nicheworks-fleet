@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Keysmith — post-quantum readiness</title>
+<style>
+  :root { --bg:#0a0c14; --panel:#121626; --line:#232a44; --ink:#e8ecff; --dim:#8b93b8; --cyan:#7fd7ff; --amber:#e3b341; --red:#ff7b72; --lime:#7ee787; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { padding:2.2rem 1.2rem 1rem; max-width:900px; margin:0 auto; }
+  h1 { margin:0; font-size:1.7rem; letter-spacing:.06em; } h1 b { color:var(--cyan); }
+  main { max-width:900px; margin:0 auto; padding:0 1.2rem 3rem; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:1.1rem 1.2rem; margin-top:1.1rem; }
+  textarea { width:100%; min-height:150px; padding:.7rem .8rem; background:#080a12; border:1px solid var(--line); border-radius:8px; color:var(--ink); font:inherit; }
+  input, button { font:inherit; }
+  input { padding:.55rem .6rem; background:#080a12; border:1px solid var(--line); border-radius:8px; color:var(--ink); width:auto; }
+  button { margin-top:.8rem; padding:.7rem 1rem; background:var(--cyan); color:#04121a; border:0; border-radius:8px; font-weight:700; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--cyan); border:1px solid var(--line); }
+  .row { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
+  .big { font-size:2.2rem; font-weight:800; } .muted { color:var(--dim); font-size:.85rem; }
+  .pill { border:1px solid var(--line); border-radius:999px; padding:.12rem .6rem; color:var(--dim); font-size:.78rem; }
+  .broken { color:var(--red); } .safe { color:var(--lime); }
+  ol { padding-left:1.2rem; } li { margin:.35rem 0; }
+  .locked { filter:blur(4px); opacity:.6; }
+  table { width:100%; border-collapse:collapse; } td,th { text-align:left; padding:.35rem .5rem; border-bottom:1px solid var(--line); font-size:.86rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔑 KEY<b>SMITH</b> <span class="muted">· post-quantum readiness</span></h1>
+  <p class="muted">Paste a PEM public key. Keysmith parses it for real (via node:crypto), tells you whether Shor's algorithm breaks it, and drafts a migration roadmap. Free shows phase 1; premium unlocks the whole plan.</p>
+</header>
+<main>
+  <div class="card">
+    <label class="muted">Public key (PEM)</label>
+    <textarea id="key" placeholder="-----BEGIN PUBLIC KEY-----&#10;MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE…&#10;-----END PUBLIC KEY-----"></textarea>
+    <div class="row">
+      <input id="asset" placeholder="asset name (e.g. api-tls-cert)" />
+      <button id="go">Analyse key</button>
+      <button class="ghost" id="sample">Use sample key</button>
+      <button class="ghost" id="status">Status</button>
+    </div>
+    <div id="log" class="muted"></div>
+  </div>
+
+  <div class="card" id="out" hidden></div>
+
+  <div class="card">
+    <div class="row"><b>NIST standards</b></div>
+    <table id="standards"><tbody></tbody></table>
+  </div>
+</main>
+<script>
+  const $ = (s) => document.querySelector(s);
+  const api = (p) => 'api/' + p;
+
+  async function loadStandards() {
+    const j = await fetch(api('standards')).then(r => r.json());
+    $('#standards').querySelector('tbody').innerHTML = j.standards.map(s =>
+      `<tr><td><b>${s.id}</b></td><td class="muted">${s.fips}</td><td>${s.use}</td><td class="muted">${s.basis}</td></tr>`).join('');
+  }
+
+  function render(d) {
+    const vuln = d.quantumVulnerable;
+    const phases = (d.roadmaps || []).map(r => `<li><b>${r.phase}</b> — ${r.detail}</li>`).join('');
+    $('#out').hidden = false;
+    $('#out').innerHTML = `
+      <div class="row" style="justify-content:space-between">
+        <div><div class="big ${vuln ? 'broken' : 'safe'}">${d.score}<span class="muted">/100</span></div>
+        <div class="muted">${d.asset}</div></div>
+        <div class="pill">${vuln ? 'quantum-vulnerable' : 'post-quantum'}</div>
+      </div>
+      <table><tbody>
+        <tr><th>Algorithm</th><td>${d.algorithm}</td></tr>
+        <tr><th>Key size</th><td>${d.keySize}</td></tr>
+        <tr><th>Why</th><td>${d.reason}</td></tr>
+        <tr><th>Harvest-now risk</th><td>${d.harvestNowDecryptLater ? 'yes — traffic captured today can be decrypted later' : 'no'}</td></tr>
+        <tr><th>Replace with</th><td>${d.recommendedReplacement}</td></tr>
+      </tbody></table>
+      <div class="row" style="margin-top:.8rem"><b>Migration roadmap</b></div>
+      <ol>${phases}</ol>
+      ${d.locked ? `<div class="locked"><li>phase 2 · hybrid</li><li>phase 3 · PQC-only</li><li>phase 4 · verify</li></div>
+        <div class="row" style="margin-top:.6rem"><span class="pill">${d.lockedPhases} more phases</span><button class="ghost" id="unlock">${d.upgrade || 'Unlock roadmap'}</button></div>` : ''}
+    `;
+    const u = $('#unlock'); if (u) u.onclick = unlock;
+  }
+
+  async function unlock() {
+    const r = await fetch(api('premium/subscribe'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tier:'roadmap' }) });
+    const j = await r.json();
+    $('#log').textContent = j.message + ' · ' + JSON.stringify(j.payment);
+  }
+
+  $('#sample').onclick = async () => {
+    const pair = await crypto.subtle.generateKey({ name:'ECDSA', namedCurve:'P-256' }, true, ['sign','verify']);
+    const spki = await crypto.subtle.exportKey('spki', pair.publicKey);
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(spki)));
+    $('#key').value = `-----BEGIN PUBLIC KEY-----\n${b64.match(/.{1,64}/g).join('\n')}\n-----END PUBLIC KEY-----`;
+    $('#asset').value = 'sample-ec-p256';
+  };
+
+  $('#go').onclick = async () => {
+    $('#log').textContent = 'parsing…';
+    const r = await fetch(api('analyze'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ key: $('#key').value, asset: $('#asset').value }) });
+    const j = await r.json();
+    if (r.status >= 400) { $('#log').textContent = '⚠ ' + (j.error || r.status); return; }
+    $('#log').textContent = `analysis #${j.id} saved`;
+    render(j);
+  };
+
+  $('#status').onclick = async () => {
+    const j = await fetch(api('premium/status')).then(r => r.json());
+    $('#log').textContent = `tier: ${j.tier} · roadmap $${j.roadmapPrice} · program $${j.programPrice}/mo — ${j.message}`;
+  };
+
+  loadStandards();
+</script>
+</body>
+</html>

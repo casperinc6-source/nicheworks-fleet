@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ruflow — runnable flows</title>
+<style>
+  :root { --bg:#080b0e; --panel:#101820; --line:#1e2c38; --ink:#e8f2fa; --dim:#7f93a3; --sky:#4fc3f7; --green:#7ee787; --red:#ff7b72; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { padding:2.2rem 1.2rem 1rem; max-width:920px; margin:0 auto; }
+  h1 { margin:0; font-size:1.7rem; letter-spacing:.06em; } h1 b { color:var(--sky); }
+  main { max-width:920px; margin:0 auto; padding:0 1.2rem 3rem; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:1rem 1.1rem; margin-top:1.1rem; }
+  .row { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
+  table { width:100%; border-collapse:collapse; } td,th { text-align:left; padding:.35rem .5rem; border-bottom:1px solid var(--line); font-size:.86rem; }
+  textarea, input, select { padding:.55rem .6rem; background:#0a1015; border:1px solid var(--line); border-radius:8px; color:var(--ink); font:inherit; }
+  textarea { width:100%; min-height:110px; }
+  button { padding:.6rem .95rem; background:var(--sky); color:#04222e; border:0; border-radius:8px; font-weight:700; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--sky); border:1px solid var(--line); }
+  .pill { border:1px solid var(--line); border-radius:999px; padding:.1rem .55rem; color:var(--dim); font-size:.75rem; }
+  .ok { color:var(--green); } .bad { color:var(--red); }
+  .muted { color:var(--dim); font-size:.84rem; }
+  pre { white-space:pre-wrap; background:#0a1015; border:1px solid var(--line); border-radius:8px; padding:.7rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔁 RU<b>FLOW</b> <span class="muted">· runnable flows</span></h1>
+  <p class="muted">A repo of runnable flows. Each flow is an ordered list of HTTP steps across the fleet; the runner executes them for real and records what each returned. Steps are locked to <code>127.0.0.1</code> (no SSRF).</p>
+</header>
+<main>
+  <div class="card">
+    <div class="row"><button id="refresh">Load flow repo</button><button class="ghost" id="status">Runner status</button><span class="pill" id="tier">free</span></div>
+    <table style="margin-top:.6rem"><thead><tr><th>Flow</th><th>Steps</th><th></th></tr></thead><tbody id="flows"></tbody></table>
+  </div>
+
+  <div class="card">
+    <b>Run output</b>
+    <pre id="out" class="muted">pick a flow to run</pre>
+  </div>
+
+  <div class="card">
+    <b>Add a flow</b>
+    <div class="muted">JSON steps, localhost only. Example:</div>
+    <textarea id="json">[
+  { "method": "GET", "url": "http://127.0.0.1:3019/api/quote?symbol=BTC", "expect": 200 }
+]</textarea>
+    <div class="row" style="margin-top:.6rem">
+      <input id="name" placeholder="flow name" />
+      <button id="save">Save flow</button>
+      <button class="ghost" id="runner">Get runner ($29/mo)</button>
+    </div>
+  </div>
+</main>
+<script>
+  const $ = (s) => document.querySelector(s);
+  const api = (p) => 'api/' + p;
+
+  async function load() {
+    const j = await fetch(api('flows')).then(r => r.json());
+    $('#flows').innerHTML = j.flows.map(f => `<tr><td><b>${f.name}</b>${f.builtIn?' <span class="pill">built-in</span>':''}</td><td class="muted">${f.stepCount}</td><td><button data-run="${f.id}" class="ghost" style="padding:.3rem .6rem">Run</button></td></tr>`).join('');
+  }
+
+  document.addEventListener('click', async (e) => {
+    const id = e.target.getAttribute && e.target.getAttribute('data-run');
+    if (!id) return;
+    $('#out').textContent = 'running…';
+    const r = await fetch(api('flows/' + id + '/run'), { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+    const j = await r.json();
+    if (r.status >= 400) { $('#out').textContent = '⚠ ' + (j.error || r.status); return; }
+    const lines = (j.results || []).map(x => `${x.ok ? '✔' : '✘'} step ${x.step} ${x.method} ${x.url} → ${x.status ?? x.error} (${x.ms}ms)`).join('\n');
+    $('#out').textContent = `${j.flow}: ${j.ok ? 'ALL OK' : j.failed + ' failed'}\n` + lines + (j.locked ? `\n… ${j.lockedSteps} more steps hidden — ${j.upgrade || ''}` : '');
+  });
+
+  $('#refresh').onclick = load;
+  $('#save').onclick = async () => {
+    let steps;
+    try { steps = JSON.parse($('#json').value); } catch (e) { $('#out').textContent = '⚠ invalid JSON: ' + e.message; return; }
+    const r = await fetch(api('flows'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: $('#name').value, steps }) });
+    const j = await r.json();
+    $('#out').textContent = r.status >= 400 ? '⚠ ' + j.error : 'saved flow #' + j.id;
+    load();
+  };
+  $('#runner').onclick = async () => {
+    const j = await fetch(api('premium/subscribe'), { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' }).then(r => r.json());
+    $('#out').textContent = j.message + '\n' + JSON.stringify(j.payment);
+    $('#tier').textContent = j.tier;
+  };
+  $('#status').onclick = async () => {
+    const j = await fetch(api('premium/status')).then(r => r.json());
+    $('#out').textContent = `tier: ${j.tier} · $${j.price}/mo · scope ${j.scope}\n${j.message}`;
+  };
+
+  load();
+</script>
+</body>
+</html>

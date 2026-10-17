@@ -1,0 +1,14 @@
+{
+  "name": "zero-growth-app",
+  "version": "0.1.0",
+  "description": "zero-growth-app — track money growing from zero (income/expense tracker with growth curve, zero dependencies)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "license": "MIT"
+}

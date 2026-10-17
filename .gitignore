@@ -1,0 +1,51 @@
+# The fleet is committed explicitly (see the paths in the commit), but this
+# file keeps a careless `git add -A` in this home directory from publishing
+# ledgers, caches, or credentials.
+
+# --- runtime data: SQLite ledgers + Vault blobs. Never commit these. ---
+**/data/
+*.db
+*.db-wal
+*.db-shm
+
+# --- archived per-app git histories (bundles; see the flatten commit) ---
+.git-archive/
+
+# --- dependencies ---
+node_modules/
+**/node_modules/
+
+# --- secrets (templates like .env.sample are reviewed and committed) ---
+.env
+.env.*
+!.env.sample
+*.pem
+*.key
+
+# --- home-directory noise that is not the product ---
+.cache/
+.config/
+.local/
+.npm/
+.docker/
+.dbus/
+.freebuff/
+.gvfs/
+.fly/
+.ssh/
+.face
+.face.icon
+.bashrc
+.bashrc.original
+.lesshst
+.profile
+.zshrc
+.zsh_history
+OpenBBUserData/
+
+# --- sibling projects that fuse-hub does not mount ---
+marketdesk/
+casper-backend/
+casper-frontend/
+hack/
+clearcheck/

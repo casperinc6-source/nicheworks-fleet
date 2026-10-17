@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Zero → Growth</title>
+<style>
+  :root { --bg:#101418; --card:#181f26; --ink:#e8edf2; --mut:#8b98a5; --up:#2ecc71; --down:#e74c3c; --line:#26303a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:1.2rem 1.5rem; border-bottom:1px solid var(--line); }
+  header h1 { margin:0; font-size:1.3rem; }
+  header h1 span { color:var(--up); }
+  main { max-width:760px; margin:1.5rem auto; padding:0 1rem; display:grid; gap:1.2rem; }
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:1rem; }
+  .stat .k { color:var(--mut); font-size:.8rem; text-transform:uppercase; letter-spacing:.5px; }
+  .stat .v { font-size:1.5rem; font-weight:700; margin-top:.3rem; }
+  .v.up { color:var(--up); } .v.down { color:var(--down); }
+  form { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:1.1rem; display:grid; grid-template-columns:110px 1fr 110px 130px auto; gap:.6rem; align-items:end; }
+  @media (max-width:640px){ form { grid-template-columns:1fr 1fr; } }
+  label { font-size:.78rem; color:var(--mut); display:grid; gap:.25rem; }
+  input, select { background:#0d1114; color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:.5rem; font-size:.95rem; }
+  button { background:var(--up); color:#06240f; font-weight:700; border:none; border-radius:8px; padding:.55rem 1rem; cursor:pointer; }
+  button.del { background:none; border:1px solid var(--line); color:var(--mut); padding:.25rem .6rem; font-weight:400; }
+  canvas { width:100%; height:220px; background:var(--card); border:1px solid var(--line); border-radius:14px; }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  th,td { padding:.55rem .8rem; text-align:left; font-size:.9rem; border-bottom:1px solid var(--line); }
+  th { color:var(--mut); font-size:.75rem; text-transform:uppercase; }
+  .inc { color:var(--up); } .exp { color:var(--down); }
+  .empty { color:var(--mut); text-align:center; padding:1.5rem; }
+</style>
+</head>
+<body>
+<header><h1>🌱 ZERO <span>→ GROWTH</span></h1></header>
+<main>
+  <div class="stats">
+    <div class="stat"><div class="k">Income</div><div class="v up" id="s-income">$0</div></div>
+    <div class="stat"><div class="k">Expenses</div><div class="v down" id="s-expense">$0</div></div>
+    <div class="stat"><div class="k">Net growth</div><div class="v" id="s-net">$0</div></div>
+  </div>
+  <canvas id="chart" width="1400" height="440"></canvas>
+  <form id="add">
+    <label>Type<select id="kind"><option value="income">Income</option><option value="expense">Expense</option></select></label>
+    <label>What<input id="label" required minlength="2" placeholder="first client, gig, sale…" /></label>
+    <label>Amount<input id="amount" type="number" min="0.01" step="0.01" required placeholder="58.00" /></label>
+    <label>Day<input id="day" type="date" /></label>
+    <button>Add</button>
+  </form>
+  <div id="list"></div>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const money = (n) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+$('#day').valueAsDate = new Date();
+
+async function api(p, o) { const r = await fetch(p, o); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || r.statusText); return d; }
+
+function drawCurve(curve) {
+  const c = $('#chart'), ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.strokeStyle = '#26303a'; ctx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(0, c.height * i / 4); ctx.lineTo(c.width, c.height * i / 4); ctx.stroke(); }
+  if (curve.length < 1) { ctx.fillStyle = '#8b98a5'; ctx.font = '28px system-ui'; ctx.fillText('Log your first entry — the line starts at zero.', 40, c.height / 2); return; }
+  const pts = [{ day: null, net: 0 }, ...curve];
+  const max = Math.max(...pts.map(p => Math.abs(p.net)), 1);
+  const X = (i) => 20 + (c.width - 40) * i / (pts.length - 1);
+  const Y = (v) => c.height / 2 - (v / max) * (c.height / 2 - 30);
+  ctx.strokeStyle = pts[pts.length - 1].net >= 0 ? '#2ecc71' : '#e74c3c';
+  ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(X(0), Y(0));
+  pts.forEach((p, i) => ctx.lineTo(X(i), Y(p.net)));
+  ctx.stroke();
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.beginPath(); ctx.arc(X(pts.length - 1), Y(pts[pts.length - 1].net), 8, 0, 7); ctx.fill();
+  ctx.fillStyle = '#8b98a5'; ctx.font = '24px system-ui';
+  ctx.fillText('net ' + money(pts[pts.length - 1].net), X(pts.length - 1) - 150, Y(pts[pts.length - 1].net) - 18);
+}
+
+async function refresh() {
+  // Relative URLs keep the dashboard working both at / and behind a mount (e.g. fuse-hub's /growth/).
+  const [s, entries] = await Promise.all([api('api/summary'), api('api/entries')]);
+  $('#s-income').textContent = money(s.income);
+  $('#s-expense').textContent = money(s.expense);
+  const net = $('#s-net'); net.textContent = money(s.net);
+  net.className = 'v ' + (s.net >= 0 ? 'up' : 'down');
+  drawCurve(s.curve);
+  $('#list').innerHTML = entries.length ? `<table>
+    <tr><th>Day</th><th>Kind</th><th>What</th><th>Amount</th><th></th></tr>
+    ${entries.map(e => `<tr><td>${e.day}</td><td class="${e.kind === 'income' ? 'inc' : 'exp'}">${e.kind}</td><td>${esc(e.label)}</td>
+      <td class="${e.kind === 'income' ? 'inc' : 'exp'}">${e.kind === 'income' ? '+' : '−'}${money(e.amount / 100)}</td>
+      <td><button class="del" data-del="${e.id}">✕</button></td></tr>`).join('')}</table>`
+    : '<div class="empty">Nothing logged yet. From zero. 🌱</div>';
+  document.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
+    await api('api/entries/' + b.dataset.del, { method: 'DELETE' }); refresh();
+  }));
+}
+
+$('#add').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    await api('api/entries', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: $('#kind').value, label: $('#label').value, amount: Number($('#amount').value), day: $('#day').value }) });
+    e.target.reset(); $('#day').valueAsDate = new Date(); refresh();
+  } catch (err) { alert(err.message); }
+});
+
+refresh();
+</script>
+</body>
+</html>

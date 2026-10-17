@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Saluki Desk — local agent model</title>
+<style>
+  :root { --bg:#0b0908; --panel:#17120f; --line:#33251d; --ink:#f6ece2; --dim:#a4886f; --copper:#e0925a; --green:#7ee787; --red:#ff7b72; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { padding:2.2rem 1.2rem 1rem; max-width:900px; margin:0 auto; }
+  h1 { margin:0; font-size:1.7rem; letter-spacing:.06em; } h1 b { color:var(--copper); }
+  main { max-width:900px; margin:0 auto; padding:0 1.2rem 3rem; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:1rem 1.1rem; margin-top:1.1rem; }
+  .row { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
+  table { width:100%; border-collapse:collapse; } td,th { text-align:left; padding:.35rem .5rem; border-bottom:1px solid var(--line); font-size:.86rem; }
+  textarea, input { width:100%; padding:.6rem .7rem; background:#0d0908; border:1px solid var(--line); border-radius:8px; color:var(--ink); font:inherit; }
+  textarea { min-height:70px; }
+  button { padding:.6rem .95rem; background:var(--copper); color:#241005; border:0; border-radius:8px; font-weight:700; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--copper); border:1px solid var(--line); }
+  .pill { border:1px solid var(--line); border-radius:999px; padding:.1rem .55rem; color:var(--dim); font-size:.75rem; }
+  .up { color:var(--green); } .down { color:var(--red); }
+  .muted { color:var(--dim); font-size:.84rem; }
+  pre { white-space:pre-wrap; background:#0d0908; border:1px solid var(--line); border-radius:8px; padding:.7rem; }
+  code { background:#0d0908; padding:.05rem .35rem; border-radius:4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🐕 <b>SALUKI DESK</b> <span class="muted">· local agent model</span></h1>
+  <p class="muted">The front desk for <b>Underdog Saluki 27B</b> — a 2-bit GGUF of Qwen3.8-27B (~7.89 GB) tuned to keep tool-calling intact. Point the desk at a local backend and it proxies chat and tool calls. No backend? It says so honestly.</p>
+</header>
+<main>
+  <div class="card">
+    <div class="row">
+      <button id="probe">Probe backend</button>
+      <button class="ghost" id="status">Desk status</button>
+      <span class="pill" id="backend"><span class="muted">backend unknown</span></span>
+    </div>
+    <div class="muted" id="probeOut" style="margin-top:.5rem"></div>
+  </div>
+
+  <div class="card">
+    <table><thead><tr><th>Model</th><th>Base</th><th>Quant</th><th>Size</th><th>Context</th></tr></thead><tbody id="models"></tbody></table>
+    <p class="muted">Wire a backend: <code>MODEL_BACKEND_URL=http://127.0.0.1:11434</code> (Ollama) or <code>:8080</code> (llama.cpp/LocalAI).</p>
+  </div>
+
+  <div class="card">
+    <b>Ask Saluki</b>
+    <textarea id="prompt">Plan a 3-step agent that audits a website and reports findings.</textarea>
+    <div class="row" style="margin-top:.6rem">
+      <button id="send">Chat</button>
+      <button class="ghost" id="tools">Tool call (get_weather)</button>
+      <label class="muted"><input type="checkbox" id="save" style="width:auto" /> save session (desk)</label>
+    </div>
+    <pre id="out" class="muted">no output yet</pre>
+  </div>
+</main>
+<script>
+  const $ = (s) => document.querySelector(s);
+  const api = (p) => 'api/' + p;
+
+  async function models() {
+    const j = await fetch(api('models')).then(r => r.json());
+    $('#models').innerHTML = j.models.map(m => `<tr><td><b>${m.name}</b><div class="muted">${m.org}</div></td><td class="muted">${m.base}</td><td class="muted">${m.quant}</td><td class="muted">${m.sizeGB} GB</td><td class="muted">${m.contextTokens.toLocaleString()}</td></tr>`).join('');
+  }
+
+  async function probe() {
+    $('#probeOut').textContent = 'probing…';
+    const j = await fetch(api('backends')).then(r => r.json());
+    const dot = j.up ? '<span class="up">● up</span>' : (j.configured ? '<span class="down">● unreachable</span>' : '<span class="down">● not configured</span>');
+    $('#backend').innerHTML = dot;
+    $('#probeOut').innerHTML = `${dot} ${j.kind ? '(' + j.kind + ') ' : ''}${j.url || ''} ${j.models && j.models.length ? '· models: ' + j.models.join(', ') : ''}<div class="muted">${j.hint || ''}</div>`;
+  }
+
+  async function call(path, body) {
+    $('#out').textContent = 'calling backend…';
+    const r = await fetch(api(path), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const j = await r.json();
+    $('#out').textContent = (r.status >= 400 ? '⚠ ' + (j.error || r.status) : JSON.stringify(j, null, 2));
+  }
+
+  $('#send').onclick = () => call('chat', { messages: [{ role: 'user', content: $('#prompt').value }], save: $('#save').checked });
+  $('#tools').onclick = () => call('tools', { prompt: $('#prompt').value });
+  $('#probe').onclick = probe;
+  $('#status').onclick = async () => {
+    const j = await fetch(api('premium/status')).then(r => r.json());
+    $('#out').textContent = `tier: ${j.tier} · model ${j.defaultModel} — ${j.message}`;
+  };
+
+  models(); probe();
+</script>
+</body>
+</html>

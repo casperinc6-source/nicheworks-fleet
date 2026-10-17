@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>pup — the little dog on the hub</title>
+<style>
+  :root { --bg:#0f1216; --floor:#151b22; --card:#181f26; --ink:#e8edf2; --mut:#8b98a5; --line:#26303a; --tan:#d8a25a; --tan2:#b9823c; --ok:#2ecc71; --bad:#e74c3c; --ball:#4fd8ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:.9rem 1.4rem; border-bottom:1px solid var(--line); display:flex; gap:.8rem; align-items:center; flex-wrap:wrap; }
+  header h1 { margin:0; font-size:1.15rem; }
+  header h1 span { color:var(--tan); }
+  .chip { font-size:.75rem; color:var(--mut); border:1px solid var(--line); border-radius:999px; padding:.2rem .6rem; }
+  main { max-width:900px; margin:1.2rem auto 3rem; padding:0 1rem; display:grid; gap:1rem; }
+
+  /* ---- the room ---- */
+  .room { position:relative; height:260px; background:linear-gradient(180deg,#0c1015 0%,var(--floor) 68%); border:1px solid var(--line); border-radius:16px; overflow:hidden; }
+  .room .sun { position:absolute; top:18px; right:26px; width:56px; height:56px; border-radius:50%; background:radial-gradient(circle,#2b3a46,#151b22); }
+  .room .rug { position:absolute; left:50%; transform:translateX(-50%); bottom:-40px; width:320px; height:90px; border-radius:50%; background:#1b232c; border:1px solid var(--line); }
+  .bubble { position:absolute; left:50%; top:22px; transform:translate(-50%,0); max-width:70%; background:#0d1114; border:1px solid var(--line); border-radius:12px; padding:.6rem .8rem; font-size:.88rem; opacity:0; transition:opacity .2s; }
+  .bubble.show { opacity:1; }
+  .bubble::after { content:""; position:absolute; left:28px; bottom:-8px; width:12px; height:12px; background:#0d1114; border-right:1px solid var(--line); border-bottom:1px solid var(--line); transform:rotate(45deg); }
+  .bubble ul { margin:.4rem 0 0; padding-left:1.1rem; color:var(--mut); font-size:.82rem; }
+
+  /* ---- the dog ---- */
+  .dog { position:absolute; bottom:34px; left:60px; width:150px; height:110px; transition:left 1.1s cubic-bezier(.3,.8,.4,1); }
+  .dog.wag .tail { animation:wag .22s infinite alternate; }
+  .dog.jump { animation:jump .55s ease; }
+  .dog.bark .head { animation:tilt .3s 2 alternate; }
+  .dog.sit .rear { transform:translateY(10px) scaleY(.86); }
+  .dog.sit { transform:translateY(8px) rotate(-4deg); }
+  .dog.sleep { transform:translateY(16px) rotate(-8deg); }
+  .dog.sleep .eye { display:none; }
+  .dog.sleep .tail { animation:none; transform:rotate(6deg); }
+  .dog.sniff .snout { animation:sniff .4s 3 alternate; }
+  .dog.z .z1, .dog.z .z2 { opacity:1; animation:floatz 2s infinite; }
+  .z1, .z2 { opacity:0; font-size:12px; fill:var(--mut); }
+  .z2 { font-size:10px; animation-delay:.7s; }
+  @keyframes wag { from { transform:rotate(-16deg); } to { transform:rotate(22deg); } }
+  @keyframes jump { 0%,100% { transform:translateY(0); } 45% { transform:translateY(-34px); } }
+  @keyframes tilt { from { transform:rotate(0); } to { transform:rotate(-9deg); } }
+  @keyframes sniff { from { transform:translateX(0); } to { transform:translateX(4px); } }
+  @keyframes floatz { 0% { opacity:0; } 30% { opacity:1; } 100% { opacity:0; transform:translateY(-18px); } }
+  @media (prefers-reduced-motion: reduce) { .dog, .dog * { animation:none !important; } }
+
+  /* ---- kennels ---- */
+  .kennels { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:.5rem; margin-top:.2rem; }
+  .kennel { text-align:left; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:.55rem .7rem; cursor:pointer; color:var(--ink); font-family:inherit; }
+  .kennel:hover { border-color:var(--ball); }
+  .kennel .m { font-size:.68rem; color:var(--mut); letter-spacing:.04em; }
+  .kennel .n { font-size:.86rem; font-weight:600; display:flex; gap:.4rem; align-items:center; }
+  .kennel .dot { width:8px; height:8px; border-radius:50%; background:var(--bad); }
+  .kennel.up .dot { background:var(--ok); }
+
+  /* ---- controls ---- */
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:.9rem 1rem; }
+  form.cmd { display:flex; gap:.5rem; }
+  input { flex:1; background:#0d1114; color:var(--ink); border:1px solid var(--line); border-radius:9px; padding:.6rem .7rem; font-size:.95rem; font-family:inherit; }
+  button.send { background:var(--tan); border:none; color:#241708; font-weight:700; border-radius:9px; padding:.6rem 1rem; cursor:pointer; font-family:inherit; }
+  .chips { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.6rem; }
+  .chips button { background:none; border:1px solid var(--line); color:var(--mut); border-radius:999px; padding:.28rem .7rem; font-size:.78rem; cursor:pointer; font-family:inherit; }
+  .chips button:hover { color:var(--ball); border-color:var(--ball); }
+  .hud { display:grid; grid-template-columns:repeat(3,1fr); gap:.6rem; }
+  .stat { background:#0d1114; border:1px solid var(--line); border-radius:10px; padding:.5rem .7rem; }
+  .stat .k { font-size:.68rem; color:var(--mut); text-transform:uppercase; letter-spacing:.05em; }
+  .stat .v { font-size:1.1rem; font-weight:700; margin-top:.1rem; }
+  ul.feed { list-style:none; margin:0; padding:0; display:grid; gap:.35rem; font-size:.84rem; }
+  ul.feed li { display:flex; gap:.5rem; color:var(--mut); }
+  ul.feed .t { color:#5d6b78; font-variant-numeric:tabular-nums; }
+  h2 { font-size:.78rem; text-transform:uppercase; letter-spacing:.09em; color:var(--mut); margin:0 0 .6rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🐕 pup — <span>the little dog on the hub</span></h1>
+  <span class="chip" id="moodChip">mood: —</span>
+  <span class="chip" id="fleetChip">apps: —</span>
+  <span class="chip">reads the fleet · never writes</span>
+</header>
+
+<main>
+  <section class="room">
+    <div class="sun"></div>
+    <div class="rug"></div>
+    <div class="bubble" id="bubble"></div>
+    <svg class="dog wag" id="dog" viewBox="0 0 150 110" aria-label="the dog">
+      <g class="tail" style="transform-origin:38px 62px">
+        <path d="M38 62 C24 54 16 40 20 28" stroke="var(--tan2)" stroke-width="9" fill="none" stroke-linecap="round" />
+      </g>
+      <ellipse class="rear" cx="52" cy="64" rx="26" ry="18" fill="var(--tan)" />
+      <rect x="44" y="76" width="8" height="20" rx="4" fill="var(--tan2)" />
+      <rect x="60" y="76" width="8" height="20" rx="4" fill="var(--tan2)" />
+      <g class="head" style="transform-origin:86px 52px">
+        <ellipse cx="86" cy="46" rx="24" ry="21" fill="var(--tan)" />
+        <path d="M66 34 L62 14 L80 26 Z" fill="var(--tan2)" />
+        <path d="M104 32 L110 14 L112 32 Z" fill="var(--tan2)" />
+        <circle cx="78" cy="42" r="3.2" fill="#1b1206" class="eye" />
+        <circle cx="95" cy="42" r="3.2" fill="#1b1206" class="eye" />
+        <g class="snout">
+          <ellipse cx="103" cy="52" rx="11" ry="8" fill="#f0d3a8" />
+          <circle cx="110" cy="50" r="3.4" fill="#1b1206" />
+        </g>
+        <path d="M84 60 q6 6 13 1" stroke="#1b1206" stroke-width="1.6" fill="none" />
+      </g>
+      <text class="z1" x="112" y="24">z</text>
+      <text class="z2" x="124" y="16">z</text>
+    </svg>
+  </section>
+
+  <section class="card">
+    <form class="cmd" id="form">
+      <input id="cmd" autocomplete="off" spellcheck="false" maxlength="120" placeholder='say something: "how&#39;s the money?", "scan growth", "go to clips", "sit"' />
+      <button class="send" type="submit">Say it</button>
+    </form>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <section class="hud">
+    <div class="stat"><div class="k">Mood</div><div class="v" id="s-mood">—</div></div>
+    <div class="stat"><div class="k">Bones fetched</div><div class="v" id="s-bones">—</div></div>
+    <div class="stat"><div class="k">Apps up</div><div class="v" id="s-up">—</div></div>
+  </section>
+
+  <section class="card">
+    <h2>Kennels — click one and the dog runs there</h2>
+    <div class="kennels" id="kennels"></div>
+  </section>
+
+  <section class="card">
+    <h2>What the dog noticed on its own</h2>
+    <ul class="feed" id="feed"><li>watching…</li></ul>
+  </section>
+
+  <section class="card">
+    <h2>Command log</h2>
+    <ul class="feed" id="log"><li>nothing yet</li></ul>
+  </section>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Relative URLs: works on :3010 and behind fuse-hub's /pup/.
+const api = async (path, options) => {
+  const res = await fetch(path, options);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+};
+const ACTIONS = ['wag', 'bark', 'jump', 'sit', 'sleep', 'sniff'];
+let seenNotice = 0;
+let sleepTimer = null;
+
+function setAction(action) {
+  const dog = $('#dog');
+  dog.classList.remove(...ACTIONS);
+  clearTimeout(sleepTimer);
+  if (action === 'scan') { dog.classList.add('wag'); walkTo('redteam'); return; }
+  if (action === 'goto') { dog.classList.add('jump'); return; }
+  dog.classList.add(action);
+  if (action === 'wag' || action === 'jump' || action === 'bark') {
+    sleepTimer = setTimeout(() => dog.classList.replace(action, 'wag'), action === 'jump' ? 700 : 1600);
+  }
+  if (action === 'sleep') dog.classList.add('z');
+}
+
+function say(text, report) {
+  const bubble = $('#bubble');
+  bubble.innerHTML = esc(text) + (report && report.length
+    ? `<ul>${report.map((line) => `<li>${esc(line)}</li>`).join('')}</ul>` : '');
+  bubble.classList.add('show');
+  setTimeout(() => bubble.classList.remove('show'), report && report.length ? 9000 : 5200);
+}
+
+async function command(text) {
+  if (!text.trim()) return;
+  say('…');
+  try {
+    const outcome = await api('api/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    say(outcome.say, outcome.report);
+    setAction(outcome.action);
+    if (outcome.action === 'goto' && outcome.data?.url) {
+      setTimeout(() => { window.location.href = outcome.data.url; }, 1200);
+    }
+    $('#s-bones').textContent = outcome.bones;
+    $('#s-mood').textContent = outcome.mood;
+    loadLog();
+  } catch (error) {
+    say(`My brain hiccuped: ${error.message}`);
+  }
+}
+
+function walkTo(mount) {
+  const kennel = document.querySelector(`.kennel[data-mount="${mount}"]`);
+  if (!kennel) return;
+  const room = kennel.closest('main').querySelector('.room').getBoundingClientRect();
+  const rect = kennel.getBoundingClientRect();
+  const dog = $('#dog');
+  const left = Math.max(12, Math.min(room.width - 160, rect.left - room.left + rect.width / 2 - 75));
+  dog.style.left = `${left}px`;
+  dog.classList.remove('sit', 'sleep', 'z');
+}
+
+async function loadState() {
+  const s = await api('api/state');
+  $('#s-mood').textContent = s.mood;
+  $('#s-bones').textContent = s.bones;
+  $('#s-up').textContent = `${s.up}/${s.fleet.length}`;
+  $('#moodChip').textContent = `mood: ${s.mood}`;
+  $('#fleetChip').textContent = `apps: ${s.up}/${s.fleet.length} up`;
+  $('#kennels').innerHTML = s.fleet.map((t) => `
+    <button class="kennel ${t.health.up ? 'up' : ''}" data-mount="${esc(t.mount)}">
+      <span class="m">/${esc(t.mount)}</span>
+      <span class="n"><span class="dot"></span>${esc(t.name)}</span>
+    </button>`).join('');
+  $('#kennels').querySelectorAll('.kennel').forEach((b) => b.addEventListener('click', () => {
+    walkTo(b.dataset.mount);
+    say(`Off to ${b.querySelector('.n').textContent.trim()} — following me?`);
+    setAction('jump');
+  }));
+  $('#chips').innerHTML = (s.help || []).slice(0, 7).map((h) => {
+    const text = h.replace(/^"|"$|".*$/g, '') || h;
+    return `<button type="button" data-cmd="${esc(h.split('—')[0].replace(/"/g, '').trim())}">${esc(h.split('—')[0].trim())}</button>`;
+  }).join('');
+  $('#chips').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => command(b.dataset.cmd)));
+
+  // Something the dog noticed while you were away → it says it out loud.
+  const latest = s.noticed[0];
+  if (latest && latest.at !== seenNotice) {
+    seenNotice = latest.at;
+    say(latest.say);
+    setAction(latest.kind === 'down' ? 'bark' : 'wag');
+  }
+  $('#feed').innerHTML = s.noticed.length
+    ? s.noticed.map((n) => `<li><span class="t">${esc(n.at.slice(11, 19))}</span> ${esc(n.say)}</li>`).join('')
+    : '<li>nothing yet — it watches health every 15 seconds</li>';
+}
+
+async function loadLog() {
+  const { log } = await api('api/log');
+  $('#log').innerHTML = log.length
+    ? log.map((l) => `<li><span class="t">${esc(l.at.slice(11, 19))}</span> <b>${esc(l.intent)}</b> ${esc(l.said)} → ${esc(l.reply)}</li>`).join('')
+    : '<li>nothing yet</li>';
+}
+
+$('#form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const text = $('#cmd').value;
+  $('#cmd').value = '';
+  command(text);
+});
+
+(async () => {
+  await loadState();
+  await loadLog();
+  // Idle life: the dog wanders a little when nobody is talking to it.
+  setInterval(() => {
+    const dog = $('#dog');
+    if (dog.classList.contains('sleep')) return;
+    if (Math.random() < 0.35) {
+      dog.style.left = `${20 + Math.random() * 60}%`;
+    }
+  }, 9000);
+  setInterval(loadState, 4000);
+})();
+</script>
+</body>
+</html>

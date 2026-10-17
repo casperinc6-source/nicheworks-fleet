@@ -1,0 +1,53 @@
+# Fly.io — the whole 25-app fleet as one machine.
+#
+#   fly volumes create fleet_data --size 1 --region iad
+#   fly deploy
+#
+# HONEST LIMITS, because they decide whether this is a business or a demo:
+#
+#   - ONE machine only. Every app keeps SQLite in /app/data. A Fly volume is
+#     pinned to a single machine, so `fly scale count 2` would give you two
+#     divergent sets of books. Scale up (more RAM/CPU), never out.
+#   - The volume is mounted once at /app/data; docker-entrypoint.sh links each
+#     app's own data dir into it. Without that (the state of this repo until
+#     now) every deploy wipes every ledger.
+#   - min_machines_running = 1 means it never sleeps: no ~50s cold start on the
+#     first customer, and it bills continuously (~$10-15/mo for 2 shared CPUs /
+#     2 GB). Set it to 0 if you would rather pay nothing and accept cold starts.
+#   - Deploying this publishes the apps. It does not take money: the paid
+#     endpoints still gate on a hardcoded token, so no card is ever charged.
+
+app = "nicheworks-fleet"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "4000"
+  FLEET_DATA_DIR = "/app/data"
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "60s"
+
+[[mounts]]
+  source = "fleet_data"
+  destination = "/app/data"
+  initial_size = "1gb"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 2
+  memory_mb = 2048

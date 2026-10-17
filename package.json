@@ -1,0 +1,19 @@
+{
+  "name": "nicheworks-fleet",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The NICHEWORKS fleet — 20 zero-dependency Node apps behind one hub. `npm start` runs them all on a single port.",
+  "scripts": {
+    "start": "node fuse-hub/server.js",
+    "test": "node --test fuse-hub/test",
+    "hub": "node fuse-hub/server.js",
+    "list": "node -e \"const s=require('fs').readFileSync('fuse-hub/server.js','utf8');const m=[...s.matchAll(/mount:\\s*'(\\w+)'[^}]*port:\\s*(\\d+)/g)];for(const x of m)console.log('/'+x[1].padEnd(11)+' :'+x[2])\""
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "freebuff": "^0.2.27"
+  },
+  "license": "MIT"
+}

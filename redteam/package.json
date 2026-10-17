@@ -1,0 +1,16 @@
+{
+  "name": "redteam",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI red-team console: runs promptfoo scans against the fleet's own endpoints.",
+  "scripts": {
+    "start": "node server.js",
+    "setup": "npm install",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "promptfoo": "0.124.1"
+  },
+  "engines": { "node": ">=20" },
+  "license": "MIT"
+}
