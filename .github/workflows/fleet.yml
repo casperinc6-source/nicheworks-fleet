@@ -1,0 +1,50 @@
+name: fleet
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: fleet test (25 apps behind the hub)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # Zero dependencies: the hub spawns every sibling and walks each mount.
+      - run: cd fuse-hub && npm test
+
+  build:
+    name: image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t fleet:ci .
+
+  deploy:
+    name: deploy to Fly
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    # Runs only once the repo has a FLY_API_TOKEN secret. Until then it is a
+    # no-op, so a push never sits red because an account does not exist yet.
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: deploy (skipped without FLY_API_TOKEN)
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "FLY_API_TOKEN is not set — skipping deploy."
+            echo "Add it with: gh secret set FLY_API_TOKEN  (or repo Settings → Secrets)."
+            echo "Then create the app + volume once:"
+            echo "  flyctl launch --no-deploy --copy-config --name nicheworks-fleet"
+            echo "  flyctl volumes create fleet_data --size 1 --region iad"
+            exit 0
+          fi
+          curl -sL https://fly.io/install.sh | sh
+          "$HOME/.fly/bin/flyctl" deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
